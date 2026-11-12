@@ -1,0 +1,1906 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>教室座位自動排位</title>
+<style>
+:root{--ink:#16181d;--line:#222;--muted:#6b7280;--accent:#2b6cb0;--bg:#f4f4f2;--bd:#d6d6d6;--danger:#b00020}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:"PingFang TC","Noto Sans TC","Noto Sans CJK TC","Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+button,input,select,textarea{font:inherit}
+button{font-size:14px;padding:7px 12px;border-radius:8px;border:1px solid #c9c9c9;background:#fff;color:var(--ink);cursor:pointer;touch-action:manipulation}
+button:hover{background:#f1f5fa}
+button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+button.pri{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.dng{color:var(--danger);border-color:#e3a3ad}
+button.armed{background:var(--danger);color:#fff;border-color:var(--danger)}
+button:disabled{opacity:.4;cursor:default}
+button.big{font-size:30px;padding:16px 56px;border-radius:18px;font-weight:700}
+button.sm{padding:3px 8px;font-size:13px}
+input[type=text],input[type=password],input[type=number],select,textarea{border:1px solid #c9c9c9;border-radius:6px;padding:6px 8px;background:#fff;color:var(--ink);max-width:100%}
+a.back{color:var(--accent);text-decoration:none;padding:7px 8px;font-size:14px}
+.top{background:#fff;border-bottom:1px solid #ddd;padding:8px 12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.top h1{font-size:18px;margin:0 10px 0 0}
+.sp{flex:1}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.muted{color:var(--muted);font-size:13px}
+.badge{display:inline-block;background:#e11d48;color:#fff;border-radius:10px;font-size:12px;padding:0 7px;margin-left:6px}
+
+/* home */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;padding:12px}
+.card{background:#fff;border:1px solid #ddd;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.card h3{margin:0;font-size:22px}
+.card .meta{font-size:13px;color:var(--muted);line-height:1.6}
+.empty-home{padding:40px;text-align:center;color:var(--muted)}
+
+/* stage */
+.wrap{padding:8px}
+.scaler{position:relative;margin:0 auto}
+.stage{position:absolute;left:0;top:0;width:1400px;height:1050px;background:#fff;transform-origin:0 0;box-shadow:0 1px 6px rgba(0,0,0,.12);overflow:hidden;user-select:none;-webkit-user-select:none}
+.room{position:absolute;left:20px;top:20px;width:1360px;height:1010px;border:1.5px solid #999;pointer-events:none}
+.grp{position:absolute;width:0;height:0}
+.box{position:absolute;border:2px solid var(--line)}
+.canedit .box{cursor:grab;touch-action:none}
+.canedit .box:hover{background:#f3f8ff}
+.box.round{border-radius:50%}
+.box.fx{display:flex;align-items:center;justify-content:center}
+.box.k-wall{border:none}
+.box.k-text{border-color:transparent}
+.canedit .box.k-text{border:1px dashed #ddd}
+.grp.sel>.box{outline:4px solid var(--accent);outline-offset:3px;background:#eef5ff}
+.t{position:absolute;white-space:nowrap;outline:none;border-radius:4px;padding:1px 4px;line-height:1.2;min-width:1em;min-height:1em}
+.fx .t{position:static}
+.t[contenteditable=true]{cursor:text;touch-action:manipulation}
+.t[contenteditable=true]:hover{background:#fff7d6}
+.t[contenteditable=true]:focus{background:#fff1b0;box-shadow:0 0 0 2px #e0b400}
+.ac{transform:translate(-50%,-50%);text-align:center}
+.al{transform:translate(0,-50%);text-align:left}
+.rz{position:absolute;width:26px;height:26px;background:var(--accent);border:3px solid #fff;border-radius:6px;cursor:nwse-resize;touch-action:none;z-index:3}
+.marq{position:absolute;border:1.5px dashed var(--accent);background:rgba(43,108,176,.12);pointer-events:none;z-index:9}
+.chip{position:absolute;width:120px;height:58px;border:1px solid #dcdcdc;border-radius:10px;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;overflow:hidden}
+.chip .nm{font-size:26px;font-weight:500;white-space:nowrap}
+.chip .nm:empty::before{content:"空位";color:#c8c8c8;font-size:20px}
+.chip .nt{font-size:14px;color:#666;white-space:nowrap}
+.chip .lock{position:absolute;right:3px;top:1px;font-size:12px}
+.chip.tpl{background:#fafafa;border-style:dashed}
+.chip.tpl .nm{color:#9aa0a6;font-size:20px}
+.admin .chip{cursor:grab;touch-action:none}
+.admin .chip:hover{background:#f3f8ff}
+.chip.bad{border-color:#d33;background:#fff0f0}
+.chip.dropt{outline:3px solid var(--accent)}
+.chip.pop{animation:pop .55s ease-out}
+@keyframes pop{0%{transform:scale(.55);opacity:.2}55%{transform:scale(1.18);opacity:1}80%{transform:scale(.96)}100%{transform:scale(1)}}
+.ghost{position:fixed;z-index:200;pointer-events:none;background:#fff;border:2px solid var(--accent);border-radius:10px;padding:6px 14px;font-size:22px;box-shadow:0 4px 14px rgba(0,0,0,.25);transform:translate(-50%,-50%)}
+
+/* selection bar */
+.selbar{display:none;position:sticky;top:0;z-index:15;background:#fffbe6;border-bottom:1px solid #e6d98a;padding:6px 12px;gap:6px;flex-wrap:wrap;align-items:center}
+.selbar.show{display:flex}
+.stp{display:inline-flex;gap:4px;align-items:center;background:#fff;border:1px solid #ddd;border-radius:8px;padding:2px 6px}
+.stp button{padding:1px 8px}
+
+/* template editor */
+.edgrid{display:grid;grid-template-columns:132px minmax(0,1fr);gap:8px;padding:8px}
+.palette{position:sticky;top:44px;align-self:start;background:#fff;border:1px solid #ddd;border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px}
+.palette h4{margin:0 0 2px;font-size:13px;color:var(--muted)}
+.palette button{text-align:left;touch-action:none;user-select:none;-webkit-user-select:none}
+.palbtn{display:none}
+@media(max-width:800px){
+  .edgrid{display:block;padding:4px}
+  .palette{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:40;border-radius:14px 14px 0 0;display:none;flex-direction:row;flex-wrap:wrap;box-shadow:0 -4px 16px rgba(0,0,0,.2);padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  .palette.open{display:flex}
+  .palette h4{width:100%}
+  .palbtn{display:block;position:fixed;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:41;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+  body.tplpage{padding-bottom:70px}
+}
+
+/* class page */
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:10px;padding:8px;align-items:start}
+@media(max-width:1050px){.cols{grid-template-columns:minmax(0,1fr)}}
+.panel{background:#fff;border:1px solid #ddd;border-radius:10px;padding:6px 12px}
+.panel details{border-top:1px solid #eee;padding:2px 0}
+.panel details:first-child{border-top:none}
+.panel summary{cursor:pointer;font-weight:600;padding:8px 0}
+.panel .body{padding:0 0 10px;display:flex;flex-direction:column;gap:8px}
+.alert{background:#fff4c2;border:1px solid #e6d070;border-radius:8px;padding:6px 10px;font-size:13px;line-height:1.5}
+.alert.bad{background:#ffe4e4;border-color:#e3a3a3}
+.ok{background:#e6f6e6;border:1px solid #9fd29f;border-radius:8px;padding:6px 10px;font-size:13px}
+table.lst{border-collapse:collapse;width:100%}
+table.lst td,table.lst th{border-bottom:1px solid #eee;padding:2px 3px;text-align:left;font-size:13px}
+table.lst input,table.lst select{width:100%;padding:4px 5px}
+.stu .ctrl{display:flex;flex-direction:column;align-items:center;gap:10px;padding:8px 12px 14px}
+.prog{width:min(92%,760px);height:16px;background:#e3e3e3;border-radius:9px;overflow:hidden}
+.prog i{display:block;height:100%;width:0;background:var(--accent)}
+.shuf{font-size:28px;font-weight:700}
+.unseated{display:flex;flex-wrap:wrap;gap:6px}
+.unseated span{background:#eef2f7;border:1px solid #cdd6e2;border-radius:14px;padding:3px 10px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.trialbar{background:#e8f1fb;border:1px solid #9cc0e6;border-radius:8px;padding:8px 10px}
+body.fs .backlink{display:none}
+
+/* modal */
+.mbg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:100;padding:12px}
+.mcard{background:#fff;border-radius:12px;padding:16px;max-width:96vw;max-height:94vh;overflow:auto;min-width:min(92vw,360px)}
+.mcard.wide{width:min(96vw,880px)}
+.mcard h3{margin:0 0 8px}
+.mcard p{margin:8px 0}
+.mcard img{max-width:100%;height:auto;border:1px solid #ddd}
+.drop{border:2px dashed #aab;border-radius:10px;padding:10px;text-align:center;color:var(--muted);font-size:13px}
+.drop.over{background:#e8f1fb;border-color:var(--accent)}
+.pt{border-collapse:collapse;width:100%}
+.pt td,.pt th{border:1px solid #ddd;padding:0;font-size:13px}
+.pt th{background:#f3f3f3;padding:4px}
+.pt input,.pt select{width:100%;border:none;border-radius:0;padding:6px;background:transparent}
+.pt tr.unc td{background:#fff6c8}
+.pt tr.dup td.nmc input{color:#c00;font-weight:700}
+.tblscroll{max-height:42vh;overflow:auto;border:1px solid #ddd}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;border-radius:10px;padding:10px 16px;z-index:300;font-size:14px;max-width:90vw}
+.shake{animation:shake .3s}
+@keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+'use strict';
+/* ================= 基本工具 ================= */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  if (props) for (const k in props) {
+    const v = props[k];
+    if (k === 'class') e.className = v;
+    else if (k === 'style' && typeof v === 'object') Object.assign(e.style, v);
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (k === 'value') { if (tag !== 'select') e.value = v; }
+    else if (v === true) e.setAttribute(k, '');
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  kids.flat(Infinity).forEach(c => { if (c == null || c === false) return; e.append(c.nodeType ? c : document.createTextNode(String(c))); });
+  if (tag === 'select' && props && 'value' in props) e.value = props.value;
+  return e;
+}
+const uid = () => 'i' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3);
+const clone = o => JSON.parse(JSON.stringify(o));
+const rnd = n => Math.floor(Math.random() * n);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const snapG = v => Math.round(v / 10) * 10;
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1);[a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+function modal(content, opts = {}) {
+  const card = h('div', { class: 'mcard' + (opts.wide ? ' wide' : '') }, content);
+  const bg = h('div', { class: 'mbg' }, card);
+  const api = { el: bg, card, close() { if (bg.parentNode) { bg.remove(); opts.onClose && opts.onClose(); } } };
+  if (!opts.sticky) bg.addEventListener('pointerdown', e => { if (e.target === bg) api.close(); });
+  document.body.append(bg);
+  return api;
+}
+function askText(title, def = '', okLabel = '確定') {
+  return new Promise(res => {
+    const inp = h('input', { type: 'text', value: def, style: { width: '100%' } });
+    let m;
+    const done = v => { res(v); m.close(); };
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') done(inp.value.trim()); });
+    m = modal(h('div', null, h('p', null, title), inp,
+      h('p', { class: 'row' }, h('button', { class: 'pri', onClick: () => done(inp.value.trim()) }, okLabel), h('button', { onClick: () => done(null) }, '取消'))),
+      { onClose: () => res(null) });
+    setTimeout(() => { inp.focus(); inp.select(); }, 30);
+  });
+}
+let _toastT;
+function toast(msg, ms = 2800) {
+  document.querySelectorAll('.toast').forEach(e => e.remove());
+  const t = h('div', { class: 'toast' }, msg); document.body.append(t);
+  clearTimeout(_toastT); _toastT = setTimeout(() => t.remove(), ms);
+}
+function confirmBtn(label, confirmLabel, fn, cls = '') {
+  const b = h('button', { class: 'dng ' + cls }, label);
+  let armed = false, t;
+  b.addEventListener('click', () => {
+    if (!armed) { armed = true; b.textContent = confirmLabel; b.classList.add('armed'); t = setTimeout(() => { armed = false; b.textContent = label; b.classList.remove('armed'); }, 3000); }
+    else { clearTimeout(t); armed = false; fn(); }
+  });
+  return b;
+}
+function download(name, blob) {
+  const a = h('a', { href: URL.createObjectURL(blob), download: name });
+  document.body.append(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+const fmtTime = t => t ? new Date(t).toLocaleString('zh-TW', { hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '尚未排位';
+
+/* ================= 預設資料（來自原本的 402/501/605） ================= */
+const N = (name, note) => note ? { name, note } : { name };
+const DEFAULTS = {
+  "402": {
+    title: "402 座位表（全直桌）", wall: "牆", desk: "老師講桌", podium: "講台（402）",
+    tables: [
+      { label: "2", left: [], right: [] },
+      { label: "3", left: [], right: [] },
+      { label: "4", left: [], right: [] },
+      { label: "1", left: [], right: [] },
+      { label: "5", left: [], right: [] },
+    ]
+  },
+  "501": {
+    title: "501 座位表（全直桌）", wall: "牆", desk: "老師講桌", podium: "講台（501）",
+    tables: [
+      { label: "2", left: [], right: [] },
+      { label: "3", left: [], right: [] },
+      { label: "4", left: [], right: [] },
+      { label: "1", left: [], right: [] },
+      { label: "5", left: [], right: [] },
+    ]
+  },
+  "605": {
+    title: "605 座位表（全直桌）", wall: "牆", desk: "老師講桌", podium: "講台（605）",
+    tables: [
+      { label: "2", left: [], right: [] },
+      { label: "3", left: [], right: [] },
+      { label: "4", left: [], right: [] },
+      { label: "1", left: [], right: [] },
+      { label: "5", left: [], right: [] },
+    ]
+  }
+};
+function pad3(arr) {
+  arr = (arr || []).map(p => ({ ...p }));
+  const E = () => ({ name: '' });
+  if (arr.length >= 3) return arr.slice(0, 3);
+  if (arr.length === 2) return [arr[0], E(), arr[1]];
+  if (arr.length === 1) return [E(), arr[0], E()];
+  return [E(), E(), E()];
+}
+function artLayout() {
+  const mk = (label, x, y) => ({ id: 'a' + label, type: 'long', x, y, orient: 'v', nL: 3, nR: 3, label });
+  return {
+    title: '座位表', objs: [
+      { id: 'wall', type: 'fx', kind: 'wall', x: 25, y: 525, w: 10, h: 1010, text: '', fill: '#555', size: 20 },
+      { id: 'walltxt', type: 'fx', kind: 'text', x: 62, y: 530, w: 60, h: 40, text: '牆', fill: '', size: 22 },
+      mk('2', 220, 290), mk('3', 700, 290), mk('4', 1150, 290), mk('1', 220, 690), mk('5', 1150, 690),
+      { id: 'desk', type: 'fx', kind: 'desk', x: 320, y: 965, w: 200, h: 70, text: '老師講桌', fill: '#F1E6C8', size: 26 },
+      { id: 'podium', type: 'fx', kind: 'podium', x: 700, y: 965, w: 440, h: 70, text: '講台', fill: '', size: 30 },
+    ]
+  };
+}
+const FX = {
+  desk: { name: '講桌', w: 200, h: 70, text: '老師講桌', fill: '#F1E6C8', size: 26 },
+  podium: { name: '講台', w: 440, h: 70, text: '講台', fill: '', size: 30 },
+  door: { name: '門', w: 100, h: 30, text: '門', fill: '#cfe8cf', size: 18 },
+  window: { name: '窗', w: 160, h: 24, text: '窗', fill: '#d6ebff', size: 16 },
+  cabinet: { name: '櫃子', w: 160, h: 56, text: '櫃子', fill: '#e6e0f0', size: 22 },
+  wall: { name: '牆', w: 12, h: 300, text: '', fill: '#555', size: 20 },
+  text: { name: '文字標籤', w: 140, h: 44, text: '文字', fill: '', size: 28 },
+};
+
+/* ================= 資料存取 ================= */
+const KEY = 'seatplan-v2';
+let DB = null;
+const defSettings = () => ({ adjDist: 120, nearDist: 450, empty: 'spread', balance: false, keep: false });
+function mkClass(o) {
+  return Object.assign({
+    id: 'c' + uid(), name: '新班級', templateId: 'tpl-art', templateName: '藝術教室', layout: { title: '座位表', objs: [] },
+    students: [], assign: {}, pins: {}, rules: [], settings: defSettings(), history: [], lostPins: [], lastArranged: null, created: Date.now()
+  }, o);
+}
+function normClass(c) {
+  c.students = (c.students || []).map(s => ({ id: s.id || uid(), no: s.no == null ? '' : String(s.no), name: s.name || '', gender: s.gender || '', note: s.note || '' }));
+  c.assign = c.assign || {}; c.pins = c.pins || {}; c.rules = c.rules || []; c.history = c.history || []; c.lostPins = c.lostPins || [];
+  c.settings = Object.assign(defSettings(), c.settings || {});
+  c.layout = c.layout || { title: '座位表', objs: [] };
+  c.layout.objs = c.layout.objs || [];
+  return c;
+}
+function seed() {
+  const art = { id: 'tpl-art', name: '藝術教室', builtin: true, layout: artLayout() };
+  const classes = [];
+  Object.keys(DEFAULTS).forEach(key => {
+    const d = DEFAULTS[key], layout = artLayout();
+    layout.title = d.title;
+    layout.objs.forEach(o => { if (o.id === 'desk') o.text = d.desk; if (o.id === 'podium') o.text = d.podium; if (o.id === 'walltxt') o.text = d.wall; });
+    const students = [], assign = {};
+    d.tables.slice().sort((a, b) => String(a.label).localeCompare(String(b.label))).forEach(t => {
+      ['left', 'right'].forEach((side, si) => {
+        pad3(t[side]).forEach((p, i) => {
+          if (!p.name) return;
+          const s = { id: uid(), no: '', name: p.name, gender: '', note: p.note || '' };
+          students.push(s); assign['a' + t.label + ':' + (si * 3 + i + 1)] = s.id;
+        });
+      });
+    });
+    classes.push(mkClass({ id: 'c' + key, name: key, templateId: 'tpl-art', templateName: '藝術教室', layout, students, assign }));
+  });
+  return { v: 2, settings: { pw: '0000', anim: 4, sound: true }, templates: [art], classes, ui: {} };
+}
+function load() {
+  try { DB = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { DB = null; }
+  if (!DB || DB.v !== 2 || !Array.isArray(DB.classes) || !Array.isArray(DB.templates)) DB = seed();
+  DB.settings = Object.assign({ pw: '0000', anim: 4, sound: true }, DB.settings || {});
+  DB.ui = DB.ui || {};
+  if (!DB.templates.length) DB.templates.push({ id: 'tpl-art', name: '藝術教室', builtin: true, layout: artLayout() });
+  DB.classes.forEach(normClass);
+  save();
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (e) { } }
+function sortRoster(arr) {
+  const hasNo = s => s.no !== '' && s.no != null && !isNaN(parseInt(s.no, 10));
+  return arr.map((s, i) => ({ s, i })).sort((a, b) => {
+    const ha = hasNo(a.s), hb = hasNo(b.s);
+    if (ha && hb) { const d = parseInt(a.s.no, 10) - parseInt(b.s.no, 10); return d || a.i - b.i; }
+    if (ha !== hb) return ha ? -1 : 1;
+    return a.i - b.i;
+  }).map(x => x.s);
+}
+
+/* ================= 幾何 ================= */
+const CW = 120, CH = 58;
+function tableInfo(o) {
+  const seats = []; let w, hh, slot = 90;
+  if (o.type === 'long') {
+    const nL = o.nL, nR = o.nR, m = Math.max(2, nL, nR), mx = Math.max(1, nL, nR);
+    if (o.orient === 'h') {
+      const Ln = m * 144; w = Ln; hh = 130; slot = Ln / mx;
+      for (let i = 0; i < nL; i++) seats.push({ side: 'a', i, n: nL, x: -Ln / 2 + Ln * (i + .5) / nL, y: -106 });
+      for (let i = 0; i < nR; i++) seats.push({ side: 'b', i, n: nR, x: -Ln / 2 + Ln * (i + .5) / nR, y: 106 });
+    } else {
+      const Ln = m * 90; w = 130; hh = Ln; slot = Ln / mx;
+      for (let i = 0; i < nL; i++) seats.push({ side: 'a', i, n: nL, x: -135, y: -Ln / 2 + Ln * (i + .5) / nL });
+      for (let i = 0; i < nR; i++) seats.push({ side: 'b', i, n: nR, x: 135, y: -Ln / 2 + Ln * (i + .5) / nR });
+    }
+  } else if (o.type === 'single') {
+    w = 110; hh = 80;
+    const d = o.dir || 'down';
+    const p = d === 'up' ? [0, -79] : d === 'left' ? [-125, 0] : d === 'right' ? [125, 0] : [0, 79];
+    seats.push({ side: 's', i: 0, n: 1, x: p[0], y: p[1] });
+  } else {
+    const n = o.n, R = 50 + 8 * n, Rc = R + 58; w = hh = 2 * R;
+    for (let i = 0; i < n; i++) {
+      const a = (-90 + 360 * i / n) * Math.PI / 180;
+      seats.push({ side: 'r', i, n, x: Math.round(Rc * Math.cos(a)), y: Math.round(Rc * Math.sin(a)) });
+    }
+  }
+  seats.forEach((s, i) => s.k = i + 1);
+  return { w, h: hh, seats, slot };
+}
+function seatsOf(layout) {
+  const out = [];
+  layout.objs.forEach(o => {
+    if (o.type === 'fx') return;
+    const inf = tableInfo(o);
+    inf.seats.forEach(s => out.push({ id: o.id + ':' + s.k, tid: o.id, k: s.k, side: s.side, i: s.i, n: s.n, ax: o.x + s.x, ay: o.y + s.y, tx: o.x, ty: o.y, o, slot: inf.slot, label: o.label || '' }));
+  });
+  return out;
+}
+function bounds(o) {
+  if (o.type === 'fx') return { x1: o.x - o.w / 2, y1: o.y - o.h / 2, x2: o.x + o.w / 2, y2: o.y + o.h / 2 };
+  const inf = tableInfo(o);
+  let b = { x1: o.x - inf.w / 2, y1: o.y - inf.h / 2, x2: o.x + inf.w / 2, y2: o.y + inf.h / 2 };
+  inf.seats.forEach(s => { b.x1 = Math.min(b.x1, o.x + s.x - CW / 2); b.x2 = Math.max(b.x2, o.x + s.x + CW / 2); b.y1 = Math.min(b.y1, o.y + s.y - CH / 2); b.y2 = Math.max(b.y2, o.y + s.y + CH / 2); });
+  return b;
+}
+function nextLabel(layout) {
+  const nums = layout.objs.filter(o => o.type !== 'fx').map(o => parseInt(o.label, 10)).filter(n => !isNaN(n));
+  return String(nums.length ? Math.max(...nums) + 1 : 1);
+}
+function newObj(key, x, y, layout) {
+  const base = { id: 'o' + uid(), x: clamp(snapG(x), 0, 1400), y: clamp(snapG(y), 0, 1050) };
+  if (key === 'long') return { ...base, type: 'long', orient: 'v', nL: 3, nR: 3, label: nextLabel(layout) };
+  if (key === 'single') return { ...base, type: 'single', dir: 'down', label: nextLabel(layout) };
+  if (key === 'round') return { ...base, type: 'round', n: 5, label: nextLabel(layout) };
+  const f = FX[key];
+  return { ...base, type: 'fx', kind: key, w: f.w, h: f.h, text: f.text, fill: f.fill, size: f.size };
+}
+
+/* ================= 編輯器狀態與繪製 ================= */
+let ES = null;
+function makeES(o) {
+  return Object.assign({
+    mode: 'tpl', holder: null, layout: null, cls: null, admin: false, canEdit: true, sel: new Set(), hist: [], S: 1,
+    chips: {}, groups: {}, preview: null, marq: false, bad: new Set(), stage: null, scaler: null, selbar: null, afterChange: null, fitH: 0, onUndo: null
+  }, o, { layout: o.holder.layout });
+}
+function esDoc() { const d = { layout: ES.holder.layout }; if (ES.cls) { d.assign = ES.cls.assign; d.pins = ES.cls.pins; } return d; }
+function esSnap() { ES.hist.push(JSON.stringify(esDoc())); if (ES.hist.length > 60) ES.hist.shift(); if (ES.onUndo) ES.onUndo(); }
+function esUndo() {
+  if (!ES || !ES.hist.length || !ES.canEdit) return;
+  const d = JSON.parse(ES.hist.pop());
+  ES.holder.layout = d.layout; ES.layout = d.layout;
+  if (ES.cls) { ES.cls.assign = d.assign; ES.cls.pins = d.pins; }
+  ES.sel.clear(); save(); esRender(); ES.afterChange && ES.afterChange(); ES.onUndo && ES.onUndo();
+}
+function pruneAssign() {
+  if (!ES.cls) return;
+  const ids = new Set(seatsOf(ES.holder.layout).map(s => s.id));
+  for (const k in ES.cls.assign) if (!ids.has(k)) delete ES.cls.assign[k];
+}
+function changed() {
+  save();
+  const es = ES; clearTimeout(es._ac);
+  es._ac = setTimeout(() => { if (ES === es && es.afterChange) es.afterChange(); }, 0);
+}
+function fit() {
+  if (!ES || !ES.stage) return;
+  const host = ES.scaler.parentElement;
+  let S = (host.clientWidth - 8) / 1400;
+  if (ES.fitH) S = Math.min(S, (window.innerHeight - ES.fitH) / 1050);
+  S = clamp(S, 0.15, 1.7); ES.S = S;
+  ES.stage.style.transform = `scale(${S})`;
+  ES.scaler.style.width = (1400 * S) + 'px'; ES.scaler.style.height = (1050 * S) + 'px';
+}
+function ptStage(ev) { const r = ES.stage.getBoundingClientRect(); return { x: (ev.clientX - r.left) / ES.S, y: (ev.clientY - r.top) / ES.S }; }
+
+function setName(nm, text) {
+  nm.textContent = text || '';
+  const len = (text || '').length;
+  nm.style.fontSize = len > 4 ? Math.max(14, Math.floor(104 / len)) + 'px' : '';
+}
+function mkText(parent, obj, key, o) {
+  const e = h('div', { class: 't' + (o.align ? ' a' + o.align : '') + (o.cls ? ' ' + o.cls : '') });
+  e.textContent = obj[key] || '';
+  if (o.x !== undefined) { e.style.left = o.x + 'px'; e.style.top = o.y + 'px'; }
+  e.style.fontSize = o.size + 'px'; e.style.fontWeight = o.bold ? '700' : '500';
+  if (o.color) e.style.color = o.color;
+  if (o.edit && ES.canEdit) {
+    e.contentEditable = 'true'; e.spellcheck = false;
+    let snapped = false;
+    e.addEventListener('focus', () => { snapped = false; });
+    e.addEventListener('input', () => {
+      if (!snapped) { const before = obj[key]; obj[key] = before; esSnap(); snapped = true; }
+      obj[key] = e.innerText.replace(/\n/g, ''); changed();
+    });
+    e.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); e.blur(); } ev.stopPropagation(); });
+    e.addEventListener('paste', ev => { ev.preventDefault(); const t = (ev.clipboardData || window.clipboardData).getData('text').replace(/\n/g, ' '); document.execCommand('insertText', false, t); });
+    e.addEventListener('pointerdown', ev => {
+      if (o.selFirst && !ES.sel.has(obj.id) && document.activeElement !== e) { startDrag(ev, obj.id); return; }
+      ev.stopPropagation();
+    });
+  }
+  parent.append(e);
+  return e;
+}
+function stuById(cls, id) { return cls.students.find(s => s.id === id); }
+
+function renderStage() {
+  if (ES.beforeRender) ES.beforeRender();
+  const L = ES.layout, st = ES.stage;
+  st.innerHTML = ''; ES.chips = {}; ES.groups = {};
+  st.classList.toggle('canedit', !!ES.canEdit);
+  st.classList.toggle('admin', !!ES.admin);
+  st.append(h('div', { class: 'room' }));
+  ES.titleEl = mkText(st, L, 'title', { x: 700, y: 65, size: 36, bold: 1, align: 'c', edit: 1 });
+  L.objs.forEach(o => st.append(buildGroup(o)));
+}
+function esRender() { renderStage(); updSelbar(); }
+
+function buildGroup(o) {
+  const g = h('div', { class: 'grp' + (ES.sel.has(o.id) ? ' sel' : '') });
+  g.style.left = o.x + 'px'; g.style.top = o.y + 'px';
+  ES.groups[o.id] = g;
+  const drag = ev => { if (ES.canEdit && ev.target === ev.currentTarget) startDrag(ev, o.id); };
+  if (o.type === 'fx') {
+    const b = h('div', { class: 'box fx k-' + o.kind });
+    Object.assign(b.style, { left: (-o.w / 2) + 'px', top: (-o.h / 2) + 'px', width: o.w + 'px', height: o.h + 'px', background: o.fill || 'transparent' });
+    if (o.kind !== 'wall') mkText(b, o, 'text', { size: o.size || 24, edit: 1, selFirst: o.kind === 'text' });
+    b.addEventListener('pointerdown', drag);
+    g.append(b);
+    if (ES.canEdit && ES.sel.size === 1 && ES.sel.has(o.id)) {
+      const rz = h('div', { class: 'rz' });
+      rz.style.left = (o.w / 2 - 13) + 'px'; rz.style.top = (o.h / 2 - 13) + 'px';
+      rz.addEventListener('pointerdown', ev => startResize(ev, o));
+      g.append(rz);
+    }
+  } else {
+    const inf = tableInfo(o);
+    const b = h('div', { class: 'box tbl' + (o.type === 'round' ? ' round' : '') });
+    Object.assign(b.style, { left: (-inf.w / 2) + 'px', top: (-inf.h / 2) + 'px', width: inf.w + 'px', height: inf.h + 'px' });
+    b.addEventListener('pointerdown', drag);
+    g.append(b);
+    mkText(g, o, 'label', { x: 0, y: 0, size: o.type === 'long' ? 44 : o.type === 'single' ? 24 : 40, align: 'c', edit: 1 });
+    inf.seats.forEach(s => g.append(buildChip(o, s)));
+  }
+  return g;
+}
+function buildChip(o, s) {
+  const id = o.id + ':' + s.k;
+  const c = h('div', { class: 'chip' });
+  c.style.left = (s.x - CW / 2) + 'px'; c.style.top = (s.y - CH / 2) + 'px';
+  if (ES.mode === 'tpl') {
+    c.classList.add('tpl');
+    c.append(h('div', { class: 'nm' }, String(s.k)));
+    c.addEventListener('pointerdown', ev => { if (ES.canEdit) startDrag(ev, o.id); });
+    return c;
+  }
+  const cls = ES.cls, a = ES.preview || cls.assign, stu = a[id] ? stuById(cls, a[id]) : null;
+  const nm = h('div', { class: 'nm' }); setName(nm, stu ? stu.name : '');
+  c.append(nm);
+  let nt = null;
+  if (stu && stu.note) { nt = h('div', { class: 'nt' }, stu.note); c.append(nt); }
+  ES.chips[id] = { c, nm, nt };
+  if (ES.admin) {
+    if (ES.bad.has(id)) c.classList.add('bad');
+    c.dataset.seat = id;
+    if (cls.pins[id]) c.append(h('span', { class: 'lock' }, '🔒'));
+    c.addEventListener('pointerdown', ev => startChipDrag(ev, id));
+  }
+  return c;
+}
+
+/* ================= 拖曳 / 縮放 / 框選 ================= */
+function startDrag(ev, id) {
+  if (ev.button > 0) return;
+  ev.preventDefault();
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  const multi = ev.shiftKey || ev.ctrlKey || ev.metaKey, was = ES.sel.has(id);
+  if (!was) { if (!multi) ES.sel.clear(); ES.sel.add(id); }
+  const items = [...ES.sel].map(i => ES.layout.objs.find(o => o.id === i)).filter(Boolean).map(o => ({ o, ox: o.x, oy: o.y }));
+  const sx = ev.clientX, sy = ev.clientY; let moved = false;
+  const mv = e => {
+    const dx = (e.clientX - sx) / ES.S, dy = (e.clientY - sy) / ES.S;
+    if (!moved) { if (Math.hypot(dx, dy) < 5) return; moved = true; esSnap(); }
+    items.forEach(it => {
+      it.o.x = clamp(snapG(it.ox + dx), 0, 1400); it.o.y = clamp(snapG(it.oy + dy), 0, 1050);
+      const g = ES.groups[it.o.id]; if (g) { g.style.left = it.o.x + 'px'; g.style.top = it.o.y + 'px'; }
+    });
+  };
+  const up = () => {
+    window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+    if (moved) changed();
+    else if (was) { if (multi) ES.sel.delete(id); else if (ES.sel.size > 1) { ES.sel.clear(); ES.sel.add(id); } else ES.sel.delete(id); }
+    esRender();
+  };
+  window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+}
+function startResize(ev, o) {
+  ev.preventDefault(); ev.stopPropagation();
+  esSnap();
+  const left = o.x - o.w / 2, top = o.y - o.h / 2;
+  const mv = e => {
+    const p = ptStage(e);
+    const w = Math.max(10, snapG(p.x - left)), hh = Math.max(10, snapG(p.y - top));
+    o.w = w; o.h = hh; o.x = left + w / 2; o.y = top + hh / 2;
+    const g = ES.groups[o.id]; if (!g) return;
+    g.style.left = o.x + 'px'; g.style.top = o.y + 'px';
+    const b = g.querySelector('.box'); Object.assign(b.style, { left: (-w / 2) + 'px', top: (-hh / 2) + 'px', width: w + 'px', height: hh + 'px' });
+    const rz = g.querySelector('.rz'); if (rz) { rz.style.left = (w / 2 - 13) + 'px'; rz.style.top = (hh / 2 - 13) + 'px'; }
+  };
+  const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); changed(); esRender(); };
+  window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+}
+function initStageEvents() {
+  const stage = ES.stage;
+  stage.addEventListener('pointerdown', ev => {
+    if (!ES.canEdit || ev.target !== stage) return;
+    if (ev.pointerType !== 'mouse' && !ES.marq) return;
+    ev.preventDefault();
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    const p0 = ptStage(ev), multi = ev.shiftKey || ev.ctrlKey || ev.metaKey;
+    const r = h('div', { class: 'marq' }); stage.append(r);
+    let moved = false;
+    const mv = e => {
+      const p = ptStage(e);
+      if (!moved && Math.hypot(p.x - p0.x, p.y - p0.y) < 6) return;
+      moved = true;
+      Object.assign(r.style, { left: Math.min(p.x, p0.x) + 'px', top: Math.min(p.y, p0.y) + 'px', width: Math.abs(p.x - p0.x) + 'px', height: Math.abs(p.y - p0.y) + 'px' });
+    };
+    const up = e => {
+      window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+      const p = ptStage(e);
+      if (moved) {
+        const x1 = Math.min(p.x, p0.x), x2 = Math.max(p.x, p0.x), y1 = Math.min(p.y, p0.y), y2 = Math.max(p.y, p0.y);
+        if (!multi) ES.sel.clear();
+        ES.layout.objs.forEach(o => { const b = bounds(o); if (b.x1 <= x2 && b.x2 >= x1 && b.y1 <= y2 && b.y2 >= y1) ES.sel.add(o.id); });
+      } else if (!multi) ES.sel.clear();
+      esRender();
+    };
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+  });
+  if (window.ResizeObserver) new ResizeObserver(() => fit()).observe(ES.scaler.parentElement);
+}
+
+/* ================= 工具列（選取後） ================= */
+const KIND = k => (FX[k] ? FX[k].name : '物件');
+function stepper(lbl, val, min, max, fn) {
+  return h('span', { class: 'stp' }, h('span', null, lbl), h('button', { disabled: val <= min, onClick: () => fn(val - 1) }, '−'), h('b', null, String(val)), h('button', { disabled: val >= max, onClick: () => fn(val + 1) }, '＋'));
+}
+function selObjs() { return [...ES.sel].map(id => ES.layout.objs.find(o => o.id === id)).filter(Boolean); }
+function updSelbar() {
+  const bar = ES.selbar; if (!bar) return;
+  bar.innerHTML = '';
+  const objs = selObjs();
+  if (!objs.length || !ES.canEdit) { bar.classList.remove('show'); return; }
+  bar.classList.add('show');
+  const one = objs.length === 1 ? objs[0] : null;
+  const name = one ? (one.type === 'fx' ? KIND(one.kind) : one.type === 'single' ? '單人桌' : '第 ' + (one.label || '?') + ' 組') : '已選 ' + objs.length + ' 項';
+  bar.append(h('b', null, name));
+  bar.append(h('button', { disabled: objs.every(o => o.type === 'round'), onClick: rotateSel }, '⟳ 旋轉90°'));
+  bar.append(h('button', { onClick: dupSel }, '複製整組'));
+  bar.append(confirmBtn('刪除', '再按一次確認刪除', delSel));
+  if (one && one.type === 'long') {
+    const v = one.orient !== 'h';
+    bar.append(stepper(v ? '左側椅' : '上方椅', one.nL, 0, 6, n => setChairs(one, 'nL', n)), stepper(v ? '右側椅' : '下方椅', one.nR, 0, 6, n => setChairs(one, 'nR', n)));
+  } else if (one && one.type === 'round') {
+    bar.append(stepper('椅子', one.n, 2, 10, n => setChairs(one, 'n', n)));
+  } else if (one && one.type === 'single') {
+    [['up', '上'], ['right', '右'], ['down', '下'], ['left', '左']].forEach(([d, t]) =>
+      bar.append(h('button', { class: (one.dir || 'down') === d ? 'on' : '', onClick: () => { esSnap(); one.dir = d; changed(); esRender(); } }, '椅' + t)));
+  }
+  bar.append(h('button', { onClick: () => { ES.sel.clear(); esRender(); } }, '完成'));
+}
+function setChairs(o, key, n) { esSnap(); o[key] = n; pruneAssign(); changed(); esRender(); }
+function rotateSel() {
+  const objs = selObjs(); if (!objs.length) return;
+  esSnap();
+  objs.forEach(o => {
+    if (o.type === 'long') o.orient = o.orient === 'h' ? 'v' : 'h';
+    else if (o.type === 'single') o.dir = { up: 'right', right: 'down', down: 'left', left: 'up' }[o.dir || 'down'];
+    else if (o.type === 'fx') { const t = o.w; o.w = o.h; o.h = t; }
+  });
+  changed(); esRender();
+}
+function dupSel() {
+  const objs = selObjs(); if (!objs.length) return;
+  esSnap();
+  const ns = new Set();
+  objs.forEach(o => { const n = clone(o); n.id = 'o' + uid(); n.x = Math.min(1380, o.x + 60); n.y = Math.min(1030, o.y + 60); ES.layout.objs.push(n); ns.add(n.id); });
+  ES.sel = ns; changed(); esRender();
+}
+function delSel() {
+  const ids = new Set(ES.sel); if (!ids.size) return;
+  esSnap();
+  ES.layout.objs = ES.layout.objs.filter(o => !ids.has(o.id)); ES.holder.layout.objs = ES.layout.objs;
+  ES.sel.clear(); pruneAssign(); changed(); esRender();
+}
+
+/* ================= 元件庫拖曳 ================= */
+const PAL = [['single', '單人桌'], ['long', '長桌'], ['round', '圓桌'], ['desk', '講桌'], ['podium', '講台'], ['door', '門'], ['window', '窗'], ['cabinet', '櫃子'], ['wall', '牆'], ['text', '文字標籤']];
+function addFromPalette(key, x, y) {
+  esSnap();
+  const o = newObj(key, x, y, ES.layout); ES.layout.objs.push(o);
+  ES.sel = new Set([o.id]); changed(); esRender();
+}
+function startPaletteDrag(ev, key, label, pal) {
+  ev.preventDefault();
+  let ghost = null, moved = false; const sx = ev.clientX, sy = ev.clientY;
+  const mv = e => {
+    if (!moved && Math.hypot(e.clientX - sx, e.clientY - sy) < 6) return;
+    moved = true;
+    if (!ghost) { ghost = h('div', { class: 'ghost' }, label); document.body.append(ghost); }
+    ghost.style.left = e.clientX + 'px'; ghost.style.top = e.clientY + 'px';
+  };
+  const up = e => {
+    window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+    if (ghost) ghost.remove();
+    if (moved) {
+      const r = ES.stage.getBoundingClientRect();
+      if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) { const p = ptStage(e); addFromPalette(key, p.x, p.y); }
+    } else addFromPalette(key, 700 + rnd(5) * 20, 480 + rnd(5) * 20);
+    if (pal && pal.classList.contains('open') && window.innerWidth <= 800) pal.classList.remove('open');
+  };
+  window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+}
+
+/* ================= 排位演算法 ================= */
+const TYPE_NAME = { adj: '不可鄰座', group: '不可同組', near: '不可相近' };
+function buildCtx(cls) {
+  const S = cls.settings, seats = seatsOf(cls.layout), m = seats.length;
+  const idx = new Map(seats.map((s, i) => [s.id, i]));
+  const adj = [], grp = [], near = [];
+  for (let i = 0; i < m; i++) { adj.push(new Uint8Array(m)); grp.push(new Uint8Array(m)); near.push(new Uint8Array(m)); }
+  for (let i = 0; i < m; i++) for (let j = i + 1; j < m; j++) {
+    const A = seats[i], B = seats[j];
+    const same = A.tid === B.tid;
+    let a = Math.hypot(A.ax - B.ax, A.ay - B.ay) < S.adjDist;
+    const g = same;
+    const nr = Math.hypot(A.tx - B.tx, A.ty - B.ty) < S.nearDist;
+    if (same) {
+      const o = A.o;
+      if (o.type === 'round') { const d = Math.abs(A.k - B.k); if (d === 1 || (o.n > 2 && d === o.n - 1)) a = true; }
+      else if (o.type === 'long') {
+        if (A.side === B.side) { if (Math.abs(A.i - B.i) === 1) a = true; }
+        else { const along = o.orient === 'h' ? Math.abs(A.ax - B.ax) : Math.abs(A.ay - B.ay); if (along <= 0.55 * A.slot) a = true; }
+      }
+    }
+    if (a) adj[i][j] = adj[j][i] = 1;
+    if (g) grp[i][j] = grp[j][i] = 1;
+    if (nr) near[i][j] = near[j][i] = 1;
+  }
+  const stu = cls.students, n = stu.length;
+  const byName = new Map(); stu.forEach((s, i) => { if (!byName.has(s.name)) byName.set(s.name, i); });
+  const cons = stu.map(() => []), conList = [];
+  cls.rules.forEach(r => {
+    const a = byName.get(r.a), b = byName.get(r.b);
+    if (a == null || b == null || a === b || !TYPE_NAME[r.type]) return;
+    cons[a].push({ o: b, t: r.type }); cons[b].push({ o: a, t: r.type }); conList.push({ a, b, t: r.type });
+  });
+  const pin = new Array(n).fill(-1), usedSeat = new Set();
+  for (const sid in cls.pins) {
+    const p = idx.get(sid), si = byName.get(cls.pins[sid]);
+    if (p == null || si == null || pin[si] >= 0 || usedSeat.has(p)) continue;
+    pin[si] = p; usedSeat.add(p);
+  }
+  return { seats, m, idx, adj, grp, near, stu, n, cons, conList, pin, free: pin.filter(p => p < 0).length };
+}
+function rel(c, t, p, q) { return p !== q && (t === 'adj' ? c.adj[p][q] : t === 'group' ? c.grp[p][q] : c.near[p][q]) === 1; }
+function countViol(c, place) {
+  const out = [];
+  c.conList.forEach(e => { const p = place[e.a], q = place[e.b]; if (p >= 0 && q >= 0 && rel(c, e.t, p, q)) out.push(e); });
+  return out;
+}
+function finalize(c, place) {
+  const assign = {}, unseated = [];
+  place.forEach((p, si) => { if (p >= 0) assign[c.seats[p].id] = c.stu[si].id; else unseated.push(c.stu[si].id); });
+  const viol = countViol(c, place).map(v => ({ a: c.stu[v.a].name, b: c.stu[v.b].name, t: v.t }));
+  return { assign, viol, ok: viol.length === 0, unseated };
+}
+function checkAssign(cls, assign) {
+  const c = buildCtx(cls), i2 = new Map(c.stu.map((s, i) => [s.id, i])), place = new Array(c.n).fill(-1);
+  for (const sid in assign) { const p = c.idx.get(sid), si = i2.get(assign[sid]); if (p != null && si != null) place[si] = p; }
+  return finalize(c, place);
+}
+function solve(c, cls) {
+  const S = cls.settings, { m, n, seats, cons, pin, stu } = c;
+  const pinned = new Uint8Array(m); for (const p of pin) if (p >= 0) pinned[p] = 1;
+  const freeSeats = []; for (let i = 0; i < m; i++) if (!pinned[i]) freeSeats.push(i);
+  const freeStu = []; for (let i = 0; i < n; i++) if (pin[i] < 0) freeStu.push(i);
+  const nPlace = Math.min(freeStu.length, freeSeats.length);
+  const tids = [...new Set(seats.map(s => s.tid))], tIdx = new Map(tids.map((t, i) => [t, i]));
+  const sT = seats.map(s => tIdx.get(s.tid));
+  const gi = stu.map(s => s.gender === '男' ? 0 : s.gender === '女' ? 1 : -1);
+  const useBal = !!S.balance && gi.includes(0) && gi.includes(1);
+  const prevSeat = new Array(n).fill(-1), prevOcc = new Set();
+  if (S.keep) {
+    const i2 = new Map(stu.map((s, i) => [s.id, i]));
+    for (const sid in cls.assign) { const si = i2.get(cls.assign[sid]), p = c.idx.get(sid); if (si != null && p != null) { prevSeat[si] = p; prevOcc.add(p); } }
+  }
+  const hasPrev = prevOcc.size > 0;
+  const MAXA = 2000, limit = 80 + 10 * n;
+  const chooseOcc = att => {
+    if (nPlace >= freeSeats.length) return freeSeats.slice();
+    if (hasPrev && att < MAXA * 0.6) {
+      const po = shuffle(freeSeats.filter(p => prevOcc.has(p)));
+      if (po.length >= nPlace) return po.slice(0, nPlace);
+      return po.concat(shuffle(freeSeats.filter(p => !prevOcc.has(p))).slice(0, nPlace - po.length));
+    }
+    const F = freeSeats.length, emptyN = F - nPlace, byT = new Map();
+    freeSeats.forEach(p => { const t = sT[p]; if (!byT.has(t)) byT.set(t, []); byT.get(t).push(p); });
+    const groups = shuffle([...byT.values()].map(g => shuffle(g.slice())));
+    const empty = new Set();
+    if (S.empty === 'concentrate') {
+      let left = emptyN;
+      for (const g of groups) { for (const p of g) { if (left <= 0) break; empty.add(p); left--; } if (left <= 0) break; }
+    } else {
+      const alloc = groups.map(g => Math.floor(emptyN * g.length / F));
+      let rem = emptyN - alloc.reduce((a, b) => a + b, 0);
+      const fr = groups.map((g, i) => ({ i, f: emptyN * g.length / F - alloc[i] + Math.random() * 0.001 })).sort((a, b) => b.f - a.f);
+      for (let k = 0; k < fr.length && rem > 0; k++) { const i = fr[k].i; if (alloc[i] < groups[i].length) { alloc[i]++; rem--; } }
+      groups.forEach((g, i) => { for (let k = 0; k < alloc[i]; k++) empty.add(g[k]); });
+    }
+    while (empty.size < emptyN) empty.add(freeSeats[rnd(F)]);
+    return freeSeats.filter(p => !empty.has(p));
+  };
+  const attempt = att => {
+    const order = shuffle(freeStu.slice()).slice(0, nPlace);
+    const O = chooseOcc(att);
+    order.sort((a, b) => cons[b].length - cons[a].length);
+    const place = pin.slice(), taken = new Int16Array(m).fill(-1);
+    pin.forEach((p, si) => { if (p >= 0) taken[p] = si; });
+    let cnt = null, cap = null;
+    if (useBal) {
+      const occ = new Array(tids.length).fill(0), tg = [0, 0]; let tot = 0;
+      O.forEach(p => { occ[sT[p]]++; tot++; });
+      pin.forEach((p, si) => { if (p >= 0) { occ[sT[p]]++; tot++; if (gi[si] >= 0) tg[gi[si]]++; } });
+      order.forEach(si => { if (gi[si] >= 0) tg[gi[si]]++; });
+      cap = [0, 1].map(g => occ.map(o => Math.ceil(tg[g] * o / Math.max(1, tot))));
+      cnt = [0, 1].map(() => new Array(tids.length).fill(0));
+      pin.forEach((p, si) => { if (p >= 0 && gi[si] >= 0) cnt[gi[si]][sT[p]]++; });
+    }
+    const keepDom = hasPrev && att < MAXA * 0.5;
+    const prevT = prevSeat.map(p => p >= 0 ? sT[p] : -1);
+    const base = shuffle(O.slice()), L = base.length;
+    let nodes = 0, abort = false;
+    const okp = (si, p) => {
+      for (const e of cons[si]) { const q = place[e.o]; if (q >= 0 && rel(c, e.t, p, q)) return false; }
+      if (useBal && gi[si] >= 0 && cnt[gi[si]][sT[p]] >= cap[gi[si]][sT[p]]) return false;
+      if (keepDom && prevT[si] >= 0 && sT[p] !== prevT[si]) return false;
+      return true;
+    };
+    const rec = k => {
+      if (k === order.length) return true;
+      const si = order[k], off = rnd(L);
+      for (let t = 0; t < L; t++) {
+        const p = base[(off + t) % L];
+        if (taken[p] >= 0 || !okp(si, p)) continue;
+        place[si] = p; taken[p] = si; if (useBal && gi[si] >= 0) cnt[gi[si]][sT[p]]++;
+        if (++nodes > limit) abort = true;
+        if (!abort && rec(k + 1)) return true;
+        place[si] = -1; taken[p] = -1; if (useBal && gi[si] >= 0) cnt[gi[si]][sT[p]]--;
+        if (abort) return false;
+      }
+      return false;
+    };
+    return rec(0) ? place : null;
+  };
+  for (let att = 0; att < MAXA; att++) { const pl = attempt(att); if (pl) return finalize(c, pl); }
+  // 找不到完全符合：採違反最少
+  let best = null, bestV = 1e9;
+  for (let r = 0; r < 40; r++) {
+    const order = shuffle(freeStu.slice()).slice(0, nPlace), O = chooseOcc(MAXA);
+    order.sort((a, b) => cons[b].length - cons[a].length);
+    const place = pin.slice(), taken = new Int16Array(m).fill(-1);
+    pin.forEach((p, si) => { if (p >= 0) taken[p] = si; });
+    for (const si of order) {
+      let bp = -1, bc = 1e9; const off = rnd(O.length);
+      for (let t = 0; t < O.length; t++) {
+        const p = O[(off + t) % O.length]; if (taken[p] >= 0) continue;
+        let cst = 0; for (const e of cons[si]) { const q = place[e.o]; if (q >= 0 && rel(c, e.t, p, q)) cst++; }
+        if (cst < bc) { bc = cst; bp = p; }
+      }
+      place[si] = bp; taken[bp] = si;
+    }
+    let v = countViol(c, place).length;
+    for (let it = 0; it < 600 && v > 0 && order.length; it++) {
+      const x = order[rnd(order.length)], p = O[rnd(O.length)], px = place[x];
+      if (p === px) continue;
+      const z = taken[p];
+      place[x] = p; taken[p] = x; if (z >= 0) { place[z] = px; taken[px] = z; } else taken[px] = -1;
+      const nv = countViol(c, place).length;
+      if (nv <= v) v = nv;
+      else { place[x] = px; taken[px] = x; if (z >= 0) { place[z] = p; taken[p] = z; } else taken[p] = -1; }
+    }
+    if (v < bestV) { bestV = v; best = place.slice(); if (v === 0) break; }
+  }
+  return finalize(c, best || pin.slice());
+}
+function sameAssign(a, b) { const ka = Object.keys(a); return ka.length === Object.keys(b).length && ka.every(k => a[k] === b[k]); }
+function arrange(cls) {
+  const c = buildCtx(cls);
+  let res = solve(c, cls);
+  for (let t = 0; t < 8 && res.ok && c.free > 1 && sameAssign(res.assign, cls.assign || {}); t++) res = solve(c, cls);
+  return res;
+}
+function badSeatSet(cls, assign, viol) {
+  const names = new Set(); viol.forEach(v => { names.add(v.a); names.add(v.b); });
+  const s = new Set();
+  for (const sid in assign) { const st = stuById(cls, assign[sid]); if (st && names.has(st.name)) s.add(sid); }
+  return s;
+}
+function pushHistory(cls, res) {
+  cls.history.unshift({ t: Date.now(), assign: clone(res.assign), ok: res.ok, viol: res.viol });
+  cls.history = cls.history.slice(0, 10);
+}
+function renameStudent(cls, st, nn) {
+  const old = st.name; if (old === nn) return;
+  cls.rules.forEach(r => { if (r.a === old) r.a = nn; if (r.b === old) r.b = nn; });
+  for (const k in cls.pins) if (cls.pins[k] === old) cls.pins[k] = nn;
+  cls.lostPins.forEach(p => { if (p.name === old) p.name = nn; });
+  st.name = nn;
+}
+
+/* ================= 名單解析 ================= */
+const STOP = /導師|班導|老師|合計|總計|小計|共計|人數|班級|座位|姓名|座號|性別|男生|女生|備註|名單|班長|副班長|教室|年級|學號|\d班|[一二三四五六七八九十]班|班$|^no\.?$|^id$/i;
+const ROWSTOP = /合計|總計|小計|導師|班導|共\s*\d+\s*人/;
+const HAN24 = /^[㐀-鿿豈-﫿·]{2,4}$/;
+const LATIN = /^[A-Za-z][A-Za-z'’\-]{1,19}$/;
+function normGender(t) {
+  t = String(t || '').trim();
+  if (/^(男|男生|m|male|boy|♂)$/i.test(t)) return '男';
+  if (/^(女|女生|f|female|girl|♀)$/i.test(t)) return '女';
+  return '';
+}
+function isNameTok(t) { return (HAN24.test(t) || LATIN.test(t)) && !STOP.test(t); }
+function noOf(t) { if (!/^\d{1,3}$/.test(t)) return null; const v = parseInt(t, 10); return v >= 1 && v <= 99 ? String(v) : null; }
+function normRows(rows) {
+  const out = [];
+  rows.forEach(r => {
+    let cells = r.map(c => String(c == null ? '' : c).normalize('NFKC').replace(/[ 　\s]+/g, ' ').trim());
+    if (cells.length === 1 && /\s/.test(cells[0])) cells = cells[0].split(/\s+/);
+    if (cells.some(c => c)) out.push(cells);
+  });
+  return out;
+}
+function textToRows(text) {
+  return text.replace(/\r/g, '').split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+    if (/[\t,，;；]/.test(l)) return l.split(/[\t,，;；]/).map(c => c.trim().replace(/^["']|["']$/g, ''));
+    return [l];
+  });
+}
+function decodeBuf(buf) {
+  const u = new Uint8Array(buf);
+  if (u[0] === 0xEF && u[1] === 0xBB && u[2] === 0xBF) return new TextDecoder('utf-8').decode(u.subarray(3));
+  if (u[0] === 0xFF && u[1] === 0xFE) return new TextDecoder('utf-16le').decode(u.subarray(2));
+  if (u[0] === 0xFE && u[1] === 0xFF) return new TextDecoder('utf-16be').decode(u.subarray(2));
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(u); } catch (e) { }
+  try { return new TextDecoder('big5').decode(u); } catch (e) { }
+  return new TextDecoder('utf-8').decode(u);
+}
+function headerRoles(row) {
+  let hasName = false; const roles = [];
+  for (const c of row) {
+    if (!c) { roles.push('skip'); continue; }
+    if (/^(姓名|名字|學生姓名|學生|名稱|name)$/i.test(c)) { roles.push('name'); hasName = true; }
+    else if (/^(座號|號碼|座位號|號|no\.?|#|number)$/i.test(c)) roles.push('no');
+    else if (/^(性別|性|sex|gender)$/i.test(c)) roles.push('gender');
+    else if (/^(備註|班級|學號|編號|序號|身分|身份|生日|電話|組別|小組|備考|註記|座位)$/.test(c)) roles.push('skip');
+    else return null;
+  }
+  return hasName ? roles : null;
+}
+function mkStu(no, name, gender, unc) { return { no: no || '', name, gender: gender || '', unc: !!unc }; }
+function rowSeq(row, out) {
+  if (row.some(c => ROWSTOP.test(c))) return;
+  let pend = '', last = null, junk = false; const made = [];
+  const handle = tok => {
+    if (!tok) return;
+    const m = tok.match(/^(\d{1,2})(?:[.、:)\-]\s*|(?=[㐀-鿿]))(.+)$/);
+    if (m) { const no = noOf(m[1]); if (no) { pend = no; handle(m[2]); return; } }
+    if (tok.includes('、') && !/^\d/.test(tok)) { tok.split('、').forEach(handle); return; }
+    const no = noOf(tok);
+    if (no) { pend = no; return; }
+    const g = normGender(tok);
+    if (g && last && !last.gender) { last.gender = g; return; }
+    if (g) return;
+    if (STOP.test(tok)) return;
+    if (isNameTok(tok)) { last = mkStu(pend, tok, '', false); pend = ''; made.push(last); return; }
+    junk = true;
+  };
+  row.forEach(cell => cell.split(/\s+/).forEach(handle));
+  made.forEach(s => { if (junk) s.unc = true; if (LATIN.test(s.name)) s.unc = true; out.push(s); });
+}
+function rowCols(row, cols, out) {
+  if (row.some(c => ROWSTOP.test(c))) return;
+  const nameI = [], noI = [], genI = [];
+  cols.forEach((r, i) => { if (r === 'name') nameI.push(i); else if (r === 'no') noI.push(i); else if (r === 'gender') genI.push(i); });
+  nameI.forEach((ni, k) => {
+    const name = (row[ni] || '').trim();
+    if (!name || /^\d+$/.test(name) || STOP.test(name)) return;
+    const no = noI[k] != null ? (noOf((row[noI[k]] || '').trim()) || '') : '';
+    const g = genI[k] != null ? normGender(row[genI[k]]) : '';
+    out.push(mkStu(no, name, g, !(HAN24.test(name) || LATIN.test(name))));
+  });
+}
+function applyMapping(rows, cols, hasHeader) {
+  const out = [];
+  rows.forEach((r, i) => { if (hasHeader && i === 0) return; rowCols(r, cols, out); });
+  return finishParse(out);
+}
+function inferCols(rows) {
+  const nc = Math.max(0, ...rows.map(r => r.length)), cols = [];
+  for (let c = 0; c < nc; c++) {
+    let tot = 0, num = 0, nm = 0, gd = 0;
+    rows.forEach(r => { const v = r[c]; if (!v) return; tot++; if (noOf(v)) num++; else if (normGender(v)) gd++; else if (isNameTok(v)) nm++; });
+    if (!tot) { cols.push('skip'); continue; }
+    cols.push(num / tot >= 0.6 ? 'no' : gd / tot >= 0.6 ? 'gender' : nm / tot >= 0.5 ? 'name' : 'skip');
+  }
+  return cols;
+}
+function finishParse(list) {
+  const withNo = list.filter(s => s.no).length;
+  if (withNo > 0 && withNo >= list.length / 2) list.forEach(s => { if (!s.no) s.unc = true; });
+  return sortRoster(list);
+}
+function autoParse(rows) {
+  rows = normRows(rows);
+  const out = []; let cols = null, usedHeader = false;
+  rows.forEach(row => {
+    const hr = headerRoles(row);
+    if (hr) { cols = hr; usedHeader = true; return; }
+    if (cols && row.length > Math.max(cols.indexOf('name'), 0)) rowCols(row, cols, out); else rowSeq(row, out);
+  });
+  const nc = Math.max(0, ...rows.map(r => r.length));
+  let useCols;
+  if (usedHeader) { useCols = cols.slice(); while (useCols.length < nc) useCols.push('skip'); }
+  else useCols = inferCols(rows);
+  return { rows, students: finishParse(out), cols: useCols, hasHeader: usedHeader, tabular: nc >= 2 };
+}
+
+/* ================= 檔案讀取 ================= */
+const MAMMOTH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+const XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+const _ld = {};
+function loadLib(url, test) {
+  if (test()) return Promise.resolve();
+  if (_ld[url]) return _ld[url];
+  return _ld[url] = new Promise((ok, no) => {
+    const s = document.createElement('script'); s.src = url; s.crossOrigin = 'anonymous';
+    s.onload = () => test() ? ok() : no(new Error('load'));
+    s.onerror = () => { delete _ld[url]; no(new Error('load')); };
+    document.head.append(s);
+  });
+}
+async function docxToRows(buf) {
+  await loadLib(MAMMOTH_URL, () => window.mammoth);
+  const r = await window.mammoth.convertToHtml({ arrayBuffer: buf });
+  const doc = new DOMParser().parseFromString(r.value, 'text/html');
+  doc.querySelectorAll('br').forEach(b => b.replaceWith('\n'));
+  const rows = [];
+  [...doc.body.children].forEach(n => {
+    const tg = n.tagName;
+    if (tg === 'TABLE') n.querySelectorAll('tr').forEach(tr => rows.push([...tr.children].map(c => c.textContent.trim())));
+    else if (tg === 'UL' || tg === 'OL') [...n.children].forEach(li => rows.push(...textToRows(li.textContent)));
+    else rows.push(...textToRows(n.textContent));
+  });
+  return rows;
+}
+async function readWorkbook(buf) {
+  await loadLib(XLSX_URL, () => window.XLSX);
+  return window.XLSX.read(buf, { type: 'array' });
+}
+function sheetRows(wb, name) {
+  return window.XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: false, defval: '' }).map(r => r.map(c => String(c)));
+}
+
+/* ================= 匯入視窗 ================= */
+function openImporter(cfg) {
+  const S = { raw: [], cols: [], hasHeader: false, tabular: false, prev: [], wb: null, mode: 'replace' };
+  const msg = h('div', { class: 'muted' }, '');
+  const ta = h('textarea', { rows: 5, style: { width: '100%' }, placeholder: '貼上名單（可從 Excel／Word 複製），例如：\n1 王小明\n2.李小華\n03、陳大文\n或：座號、姓名、性別' });
+  const fileIn = h('input', { type: 'file', accept: '.txt,.csv,.tsv,.docx,.doc,.xlsx,.xls,.xlsm,.ods', style: { display: 'none' } });
+  const drop = h('div', { class: 'drop' }, '把檔案拖進這裡（.txt .csv .docx .xlsx .xls）');
+  const sheetBox = h('div'), out = h('div');
+  let M;
+  const run = () => {
+    const r = autoParse(S.raw);
+    S.raw = r.rows; S.cols = r.cols; S.hasHeader = r.hasHeader; S.tabular = r.tabular; S.prev = r.students;
+    renderOut();
+  };
+  const fromText = () => { S.raw = textToRows(ta.value); run(); };
+  async function loadFile(f) {
+    msg.textContent = '讀取中…';
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    try {
+      if (ext === 'doc') { msg.textContent = ''; toast('舊版 .doc 無法讀取，請另存成 .docx 或 .txt 再匯入', 5000); alertBox('請另存成 .docx 或 .txt 再匯入'); return; }
+      const buf = await f.arrayBuffer();
+      if (ext === 'docx') { S.raw = await docxToRows(buf); sheetBox.innerHTML = ''; }
+      else if (['xlsx', 'xls', 'xlsm', 'ods'].includes(ext)) {
+        S.wb = await readWorkbook(buf);
+        const names = S.wb.SheetNames; sheetBox.innerHTML = '';
+        let first = names.find(n => sheetRows(S.wb, n).some(r => r.some(c => c))) || names[0];
+        if (names.length > 1) {
+          const sel = h('select', { onChange: () => { S.raw = sheetRows(S.wb, sel.value); run(); } }, names.map(n => h('option', { value: n }, n)));
+          sel.value = first;
+          sheetBox.append(h('p', { class: 'row' }, h('b', null, '工作表：'), sel, h('span', { class: 'muted' }, '此檔案有多個工作表，請選擇要匯入的')));
+        }
+        S.raw = sheetRows(S.wb, first);
+      } else { const t = decodeBuf(buf); ta.value = t; sheetBox.innerHTML = ''; S.raw = textToRows(t); }
+      msg.textContent = '已讀取：' + f.name;
+      run();
+    } catch (e) {
+      msg.textContent = '';
+      alertBox((ext === 'docx' || ext === 'xlsx' || ext === 'xls') ? '無法載入讀檔套件（需要網路連線），或檔案已損壞。可改用貼上文字。' : '讀取失敗：' + e.message);
+    }
+  }
+  function alertBox(t) { out.innerHTML = ''; out.append(h('div', { class: 'alert bad' }, t)); }
+  fileIn.addEventListener('change', () => { if (fileIn.files[0]) loadFile(fileIn.files[0]); fileIn.value = ''; });
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); drop.classList.add('over'); }));
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', e => { e.preventDefault(); e.stopPropagation(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) loadFile(f); });
+
+  function dupInfo() {
+    const cnt = new Map(); S.prev.forEach(r => { const n = r.name.trim(); if (n) cnt.set(n, (cnt.get(n) || 0) + 1); });
+    const have = new Set((cfg.existing || []).map(s => s.name));
+    return { cnt, have };
+  }
+  function renderOut() {
+    out.innerHTML = '';
+    const info = h('b'), dupMsg = h('div', { class: 'alert', style: { display: 'none' } });
+    const tbody = h('tbody');
+    const refresh = () => {
+      const { cnt, have } = dupInfo();
+      const named = S.prev.filter(r => r.name.trim());
+      info.textContent = `辨識到 ${named.length} 位學生`;
+      const dups = [...cnt.entries()].filter(([, v]) => v > 1).map(([k]) => k);
+      const inOld = S.mode === 'append' ? named.filter(r => have.has(r.name.trim())).map(r => r.name.trim()) : [];
+      const bits = [];
+      if (dups.length) bits.push('名單內姓名重複：' + dups.join('、'));
+      if (inOld.length) bits.push('已在目前名單（加到後面時會略過）：' + [...new Set(inOld)].join('、'));
+      dupMsg.style.display = bits.length ? '' : 'none'; dupMsg.textContent = '⚠ ' + bits.join('；');
+      [...tbody.children].forEach((tr, i) => {
+        const r = S.prev[i]; if (!r) return;
+        const nm = r.name.trim();
+        tr.className = (r.unc ? 'unc ' : '') + (nm && (cnt.get(nm) > 1 || (S.mode === 'append' && have.has(nm))) ? 'dup' : '');
+      });
+    };
+    const rowEl = (r) => {
+      const tr = h('tr');
+      const mk = (key, cls2) => h('td', { class: cls2 || '' }, h('input', { type: 'text', value: r[key], onInput: e => { r[key] = e.target.value; r.unc = r.unc && key !== 'name' ? r.unc : (key === 'name' ? false : r.unc); refresh(); } }));
+      const g = h('select', { value: r.gender, onChange: e => { r.gender = e.target.value; } }, h('option', { value: '' }, '—'), h('option', { value: '男' }, '男'), h('option', { value: '女' }, '女'));
+      tr.append(mk('no'), mk('name', 'nmc'), h('td', null, g),
+        h('td', null, h('button', { class: 'sm dng', onClick: () => { S.prev.splice(S.prev.indexOf(r), 1); tr.remove(); refresh(); } }, '刪')));
+      return tr;
+    };
+    S.prev.forEach(r => tbody.append(rowEl(r)));
+    if (S.tabular) {
+      const roles = [['skip', '略過'], ['no', '座號'], ['name', '姓名'], ['gender', '性別']];
+      const nc = Math.min(S.cols.length, 10);
+      const selRow = h('tr'), sampleRow = h('tr');
+      for (let i = 0; i < nc; i++) {
+        selRow.append(h('td', null, h('select', { value: S.cols[i] || 'skip', onChange: e => { S.cols[i] = e.target.value; } }, roles.map(([v, t]) => h('option', { value: v }, t)))));
+        sampleRow.append(h('td', { style: { padding: '3px 5px', color: '#666' } }, (S.raw[0] && S.raw[0][i]) || '', ' / ', (S.raw[1] && S.raw[1][i]) || ''));
+      }
+      const hdrCk = h('input', { type: 'checkbox', checked: S.hasHeader, onChange: e => { S.hasHeader = e.target.checked; } });
+      out.append(h('details', null, h('summary', null, '欄位對應（辨識不對時在這裡調整）'),
+        h('div', { class: 'tblscroll', style: { maxHeight: 'none' } }, h('table', { class: 'pt' }, h('tbody', null, selRow, sampleRow))),
+        h('p', { class: 'row' }, h('label', null, hdrCk, ' 第一列是標題列'),
+          h('button', { onClick: () => { S.prev = applyMapping(S.raw, S.cols, S.hasHeader); renderOut(); } }, '套用欄位對應'))));
+    }
+    out.append(h('p', { class: 'row' }, info, h('span', { class: 'muted' }, '（淡黃色＝不確定，請檢查；格子都可直接修改）')), dupMsg,
+      h('div', { class: 'tblscroll' }, h('table', { class: 'pt' }, h('thead', null, h('tr', null, h('th', { style: { width: '18%' } }, '座號'), h('th', null, '姓名'), h('th', { style: { width: '20%' } }, '性別'), h('th', { style: { width: '14%' } }, ''))), tbody)),
+      h('p', null, h('button', { onClick: () => { const r = mkStu('', '', '', false); S.prev.push(r); tbody.append(rowEl(r)); refresh(); tbody.lastChild.querySelector('input').focus(); } }, '＋ 新增一列')));
+    if (cfg.existing) {
+      const mkRadio = (v, t) => h('label', { style: { marginRight: '14px' } }, h('input', { type: 'radio', name: 'impmode', checked: S.mode === v, onChange: () => { S.mode = v; refresh(); } }), ' ' + t);
+      out.append(h('p', null, mkRadio('replace', '取代目前名單'), mkRadio('append', '加到後面，重複的人略過')));
+    }
+    out.append(h('p', { class: 'row' }, h('button', { class: 'pri', onClick: apply }, '確認寫入'), h('button', { onClick: () => M.close() }, '取消')));
+    refresh();
+  }
+  function apply() {
+    const list = S.prev.map(r => ({ no: (r.no || '').trim(), name: (r.name || '').replace(/[\s　]+$|^[\s　]+/g, ''), gender: r.gender })).filter(r => r.name);
+    list.forEach(r => { const n = noOf(r.no); r.no = n || ''; });
+    if (!list.length) { toast('沒有可寫入的學生'); return; }
+    cfg.onApply(list, S.mode); M.close();
+  }
+  M = modal(h('div', null,
+    h('h3', null, cfg.title || '匯入名單'),
+    h('p', { class: 'muted' }, '檔案只在這個瀏覽器內讀取，不會上傳到任何地方。'),
+    ta,
+    h('p', { class: 'row' }, h('button', { onClick: fromText }, '辨識貼上的文字'), h('button', { onClick: () => fileIn.click() }, '匯入檔案…'), fileIn, msg),
+    drop, sheetBox, out), { wide: true, sticky: true });
+  M.card.insertBefore(h('p', { style: { textAlign: 'right', margin: 0 } }, h('button', { class: 'sm', onClick: () => M.close() }, '✕ 關閉')), M.card.firstChild);
+  if (cfg.text) { ta.value = cfg.text; fromText(); }
+  if (cfg.file) loadFile(cfg.file);
+  return M;
+}
+function applyRoster(cls, list, mode) {
+  const oldBy = new Map(); cls.students.forEach(s => { if (!oldBy.has(s.name)) oldBy.set(s.name, s); });
+  let result;
+  if (mode === 'append') {
+    const have = new Set(cls.students.map(s => s.name));
+    result = cls.students.concat(list.filter(r => !have.has(r.name)).map(r => ({ id: uid(), no: r.no, name: r.name, gender: r.gender, note: '' })));
+  } else {
+    const used = new Set();
+    result = list.map(r => {
+      const o = oldBy.get(r.name);
+      if (o && !used.has(o.id)) { used.add(o.id); return { ...o, no: r.no, gender: r.gender || o.gender }; }
+      return { id: uid(), no: r.no, name: r.name, gender: r.gender, note: '' };
+    });
+  }
+  cls.students = sortRoster(result);
+  const ids = new Set(cls.students.map(s => s.id));
+  for (const k in cls.assign) if (!ids.has(cls.assign[k])) delete cls.assign[k];
+}
+function rosterFromList(list) { return sortRoster(list.map(r => ({ id: uid(), no: r.no, name: r.name, gender: r.gender, note: '' }))); }
+
+/* ================= 匯出：PNG / JSON ================= */
+function drawCanvas(layout, cls, assign) {
+  const K = 2, cv = document.createElement('canvas'); cv.width = 1400 * K; cv.height = 1050 * K;
+  const g = cv.getContext('2d'); g.scale(K, K);
+  const font = getComputedStyle(document.body).fontFamily;
+  const txt = (s, x, y, size, align, color, bold) => {
+    if (!s) return;
+    g.fillStyle = color || '#111'; g.font = `${bold ? 700 : 500} ${size}px ${font}`;
+    g.textBaseline = 'middle'; g.textAlign = align === 'l' ? 'left' : align === 'r' ? 'right' : 'center';
+    g.fillText(s, x, y);
+  };
+  const rrect = (x, y, w, hh, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + hh, r); g.arcTo(x + w, y + hh, x, y + hh, r); g.arcTo(x, y + hh, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+  g.fillStyle = '#fff'; g.fillRect(0, 0, 1400, 1050);
+  g.strokeStyle = '#999'; g.lineWidth = 1.5; g.strokeRect(20, 20, 1360, 1010);
+  txt(layout.title, 700, 65, 36, 'c', '#111', true);
+  layout.objs.forEach(o => {
+    if (o.type === 'fx') {
+      const x = o.x - o.w / 2, y = o.y - o.h / 2;
+      if (o.fill) { g.fillStyle = o.fill; g.fillRect(x, y, o.w, o.h); }
+      if (o.kind !== 'wall' && o.kind !== 'text') { g.strokeStyle = '#222'; g.lineWidth = 2; g.strokeRect(x, y, o.w, o.h); }
+      if (o.kind !== 'wall') txt(o.text, o.x, o.y, o.size || 24, 'c');
+      return;
+    }
+    const inf = tableInfo(o);
+    g.strokeStyle = '#222'; g.lineWidth = 2;
+    if (o.type === 'round') { g.beginPath(); g.arc(o.x, o.y, inf.w / 2, 0, Math.PI * 2); g.stroke(); }
+    else g.strokeRect(o.x - inf.w / 2, o.y - inf.h / 2, inf.w, inf.h);
+    txt(o.label, o.x, o.y, o.type === 'long' ? 44 : o.type === 'single' ? 24 : 40, 'c');
+    inf.seats.forEach(s => {
+      const cx = o.x + s.x, cy = o.y + s.y, id = o.id + ':' + s.k;
+      g.strokeStyle = '#dcdcdc'; g.lineWidth = 1; g.fillStyle = '#fff'; rrect(cx - CW / 2, cy - CH / 2, CW, CH, 10); g.fill(); g.stroke();
+      const st = assign && assign[id] ? stuById(cls, assign[id]) : null;
+      if (!st) { txt('空位', cx, cy, 20, 'c', '#c8c8c8'); return; }
+      const sz = st.name.length > 4 ? Math.max(14, Math.floor(104 / st.name.length)) : 26;
+      if (st.note) { txt(st.name, cx, cy - 8, sz, 'c'); txt(st.note, cx, cy + 16, 14, 'c', '#666'); } else txt(st.name, cx, cy, sz, 'c');
+    });
+  });
+  return cv;
+}
+function savePNG(cls, layout, assign) {
+  const ready = gdBegin();
+  const cv = drawCanvas(layout, cls, assign), url = cv.toDataURL('image/png');
+  cv.toBlob(b => gdUpload(ready, gdName(cls, 'png'), b), 'image/png');
+  let m;
+  m = modal(h('div', { style: { textAlign: 'center' } }, h('p', null, '長按（或按右鍵）圖片即可儲存，或按下方按鈕下載'), h('img', { src: url, alt: '座位表圖片' }),
+    h('p', { class: 'row', style: { justifyContent: 'center' } },
+      h('button', { class: 'pri', onClick: () => cv.toBlob(b => download(cls.name + '座位表.png', b), 'image/png') }, '下載 PNG'), h('button', { onClick: () => m.close() }, '關閉'))));
+}
+/* ---- Google 雲端硬碟同步（使用者自己的 Client ID，只存取本程式建立的檔案） ---- */
+const GD = { token: null, exp: 0 };
+function gdLoadGIS() {
+  return new Promise((ok, no) => {
+    if (window.google && google.accounts && google.accounts.oauth2) return ok();
+    const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client';
+    s.onload = ok; s.onerror = () => no(new Error('無法載入 Google 登入元件（需要網路）')); document.head.append(s);
+  });
+}
+async function gdSignIn() {
+  const id = (DB.settings.gClientId || '').trim();
+  if (!id) { toast('請先在後台填入 Google Client ID'); return false; }
+  try { await gdLoadGIS(); } catch (e) { toast(e.message); return false; }
+  return new Promise(res => {
+    const tc = google.accounts.oauth2.initTokenClient({
+      client_id: id, scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: r => { if (r.error) { toast('Google 登入失敗：' + r.error); res(false); return; } GD.token = r.access_token; GD.exp = Date.now() + (r.expires_in - 60) * 1000; res(true); },
+      error_callback: () => { toast('Google 登入已取消或被瀏覽器擋下，請到後台重新登入'); res(false); }
+    });
+    tc.requestAccessToken({ prompt: GD.token ? '' : 'consent' });
+  });
+}
+function gdBegin() { return DB.settings.gOn ? ((GD.token && Date.now() < GD.exp) ? Promise.resolve(true) : gdSignIn()) : Promise.resolve(false); }
+function gdName(cls, ext) {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return `${cls.name}座位表_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.${ext}`;
+}
+async function gdFolder() {
+  const H = { Authorization: 'Bearer ' + GD.token };
+  if (DB.settings.gFolder) {
+    const r = await fetch('https://www.googleapis.com/drive/v3/files/' + DB.settings.gFolder + '?fields=id,trashed', { headers: H });
+    if (r.ok && !(await r.json()).trashed) return DB.settings.gFolder;
+  }
+  const q = encodeURIComponent("name='座位表' and mimeType='application/vnd.google-apps.folder' and trashed=false");
+  const f = await (await fetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id)', { headers: H })).json();
+  let id = f.files && f.files[0] && f.files[0].id;
+  if (!id) {
+    const c = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', { method: 'POST', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: '座位表', mimeType: 'application/vnd.google-apps.folder' }) });
+    if (!c.ok) throw new Error('建立資料夾失敗 (' + c.status + ')');
+    id = (await c.json()).id;
+  }
+  DB.settings.gFolder = id; save(); return id;
+}
+async function gdUpload(ready, name, blob) {
+  if (!(await ready)) return;
+  try {
+    const folder = await gdFolder();
+    const fd = new FormData();
+    fd.append('metadata', new Blob([JSON.stringify({ name, parents: [folder] })], { type: 'application/json' }));
+    fd.append('file', blob);
+    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', { method: 'POST', headers: { Authorization: 'Bearer ' + GD.token }, body: fd });
+    if (r.status === 401) { GD.token = null; toast('Google 授權已過期，請再按一次儲存'); return; }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    toast('☁ 已同步到 Google 雲端硬碟「座位表」資料夾：' + name, 4000);
+  } catch (e) { toast('同步到 Google 雲端失敗：' + e.message, 5000); }
+}
+
+/* ---- 匯出 Word / Excel（依組別，每組三列） ---- */
+function groupRows(cls, assign) {
+  const tabs = cls.layout.objs.filter(o => o.type !== 'fx').slice().sort((a, b) => {
+    const na = parseFloat(a.label), nb = parseFloat(b.label);
+    if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+    if (!isNaN(na) !== !isNaN(nb)) return isNaN(na) ? 1 : -1;
+    return a.x - b.x || a.y - b.y;
+  });
+  return tabs.map(o => ({
+    title: '第 ' + (o.label || '?') + ' 組',
+    seats: tableInfo(o).seats.map(s => {
+      const st = assign && assign[o.id + ':' + s.k] ? stuById(cls, assign[o.id + ':' + s.k]) : null;
+      return { text: st ? ((st.no ? st.no + ' ' : '') + st.name) : '', note: st ? st.note : '' };
+    })
+  }));
+}
+async function saveExcel(cls, assign) {
+  const ready = gdBegin();
+  try { await loadLib(XLSX_URL, () => window.XLSX); } catch (e) { toast('無法載入 Excel 套件（需要網路連線）'); return; }
+  const gs = groupRows(cls, assign), cols = 1 + Math.max(1, ...gs.map(g => g.seats.length));
+  const aoa = [], merges = [];
+  gs.forEach(g => {
+    const r = aoa.length;
+    aoa.push([g.title, ...Array(cols - 1).fill('')]);
+    merges.push({ s: { r, c: 0 }, e: { r, c: cols - 1 } });
+    aoa.push(['座號／姓名', ...g.seats.map(s => s.text), ...Array(cols - 1 - g.seats.length).fill('')]);
+    aoa.push(['幹部補充區', ...g.seats.map(s => s.note), ...Array(cols - 1 - g.seats.length).fill('')]);
+  });
+  const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges'] = merges; ws['!cols'] = Array.from({ length: cols }, (_, i) => ({ wch: i ? 14 : 12 }));
+  const wb = window.XLSX.utils.book_new(); window.XLSX.utils.book_append_sheet(wb, ws, cls.name.slice(0, 28) || '座位表');
+  const arr = window.XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  const xb = new Blob([arr], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  download(cls.name + '座位表.xlsx', xb);
+  gdUpload(ready, gdName(cls, 'xlsx'), xb);
+}
+function crc32(b) {
+  let t = crc32.t; if (!t) { t = crc32.t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } }
+  let r = 0xFFFFFFFF; for (const x of b) r = t[(r ^ x) & 255] ^ (r >>> 8); return (r ^ 0xFFFFFFFF) >>> 0;
+}
+function zipStore(files) {
+  const te = new TextEncoder(), parts = [], cd = []; let off = 0;
+  for (const [name, txt] of files) {
+    const nb = te.encode(name), d = te.encode(txt), crc = crc32(d);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint32(14, crc, true); lh.setUint32(18, d.length, true); lh.setUint32(22, d.length, true); lh.setUint16(26, nb.length, true);
+    parts.push(new Uint8Array(lh.buffer), nb, d);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint32(16, crc, true); ch.setUint32(20, d.length, true); ch.setUint32(24, d.length, true); ch.setUint16(28, nb.length, true); ch.setUint32(42, off, true);
+    cd.push(new Uint8Array(ch.buffer), nb); off += 30 + nb.length + d.length;
+  }
+  const cdLen = cd.reduce((s, x) => s + x.length, 0), e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, cdLen, true); e.setUint32(16, off, true);
+  return new Blob([...parts, ...cd, new Uint8Array(e.buffer)], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+}
+function saveWord(cls, assign) {
+  const ready = gdBegin();
+  const x = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const gs = groupRows(cls, assign), cols = 1 + Math.max(1, ...gs.map(g => g.seats.length));
+  const W = Math.floor(10200 / cols);
+  const rpr = b => `<w:rPr><w:rFonts w:ascii="Microsoft JhengHei" w:eastAsia="Microsoft JhengHei" w:hAnsi="Microsoft JhengHei"/>${b ? '<w:b/>' : ''}<w:sz w:val="24"/></w:rPr>`;
+  const tc = (t, o = {}) => `<w:tc><w:tcPr><w:tcW w:w="${o.span ? W * o.span : W}" w:type="dxa"/>${o.span ? `<w:gridSpan w:val="${o.span}"/>` : ''}${o.fill ? `<w:shd w:val="clear" w:color="auto" w:fill="${o.fill}"/>` : ''}<w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr>${t ? `<w:r>${rpr(o.b)}<w:t xml:space="preserve">${x(t)}</w:t></w:r>` : ''}</w:p></w:tc>`;
+  const tr = (cells, ht) => `<w:tr><w:trPr><w:trHeight w:val="${ht}" w:hRule="atLeast"/></w:trPr>${cells.join('')}</w:tr>`;
+  const pad = n => Array.from({ length: n }, () => tc(''));
+  let rows = '';
+  gs.forEach(g => {
+    rows += tr([tc(g.title, { span: cols, b: 1, fill: 'D9E2F3' })], 500);
+    rows += tr([tc('座號／姓名', { b: 1, fill: 'F2F2F2' }), ...g.seats.map(s => tc(s.text)), ...pad(cols - 1 - g.seats.length)], 600);
+    rows += tr([tc('幹部補充區', { b: 1, fill: 'F2F2F2' }), ...g.seats.map(s => tc(s.note)), ...pad(cols - 1 - g.seats.length)], 600);
+  });
+  const bd = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(k => `<w:${k} w:val="single" w:sz="6" w:space="0" w:color="444444"/>`).join('');
+  const title = `<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r>${rpr(1).replace('w:val="24"', 'w:val="36"')}<w:t>${x(cls.layout.title || cls.name + ' 座位表')}</w:t></w:r></w:p>`;
+  const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${title}<w:tbl><w:tblPr><w:tblW w:w="${W * cols}" w:type="dxa"/><w:jc w:val="center"/><w:tblBorders>${bd}</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>${Array.from({ length: cols }, () => `<w:gridCol w:w="${W}"/>`).join('')}</w:tblGrid>${rows}</w:tbl><w:p/><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="900" w:right="850" w:bottom="900" w:left="850" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr></w:body></w:document>`;
+  const blob = zipStore([
+    ['[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'],
+    ['_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'],
+    ['word/document.xml', doc]]);
+  download(cls.name + '座位表.docx', blob);
+  gdUpload(ready, gdName(cls, 'docx'), blob);
+}
+function exportJSON(which) {
+  let payload;
+  if (which === 'all') payload = { app: 'seatplan', v: 2, templates: DB.templates, classes: DB.classes };
+  else {
+    const c = DB.classes.find(x => x.id === which), t = DB.templates.find(x => x.id === c.templateId);
+    payload = { app: 'seatplan', v: 2, templates: t ? [t] : [], classes: [c] };
+  }
+  download(which === 'all' ? '座位表-全部備份.json' : DB.classes.find(x => x.id === which).name + '-座位表設定.json', new Blob([JSON.stringify(payload, null, 1)], { type: 'application/json' }));
+}
+async function importBackup(file) {
+  let data;
+  try { data = JSON.parse(decodeBuf(await file.arrayBuffer())); } catch (e) { toast('檔案格式不正確'); return; }
+  if (!data || data.app !== 'seatplan' || !Array.isArray(data.classes)) { toast('這不是本程式匯出的設定檔'); return; }
+  let m;
+  const done = mode => {
+    const tpls = (data.templates || []).filter(t => t && t.id && t.layout);
+    if (mode === 'replace') {
+      DB.templates = tpls.length ? tpls : DB.templates;
+      DB.classes = data.classes.map(c => normClass(c));
+    } else {
+      tpls.forEach(t => { if (!DB.templates.some(x => x.id === t.id)) DB.templates.push(t); });
+      data.classes.forEach(c => { c.id = 'c' + uid(); DB.classes.push(normClass(c)); });
+    }
+    save(); m.close(); toast('已匯入 ' + data.classes.length + ' 個班級'); route();
+  };
+  m = modal(h('div', null, h('h3', null, '匯入設定'), h('p', null, `檔案內有 ${data.classes.length} 個班級、${(data.templates || []).length} 個教室範本。`),
+    h('p', { class: 'row' }, h('button', { class: 'pri', onClick: () => done('merge') }, '加入現有資料'), confirmBtn('取代全部資料', '再按一次確認取代', () => done('replace')), h('button', { onClick: () => m.close() }, '取消'))));
+}
+function pickBackup() {
+  const f = h('input', { type: 'file', accept: '.json,application/json', style: { display: 'none' } });
+  f.addEventListener('change', () => { if (f.files[0]) importBackup(f.files[0]); });
+  document.body.append(f); f.click(); setTimeout(() => f.remove(), 60000);
+}
+function backupModal(cls) {
+  let m;
+  m = modal(h('div', null, h('h3', null, '備份與還原'), h('p', { class: 'muted' }, '資料都存在這台裝置的瀏覽器裡。建議定期匯出備份。'),
+    h('p', { class: 'row' }, h('button', { onClick: () => exportJSON('all') }, '匯出全部班級與範本（JSON）'), cls ? h('button', { onClick: () => exportJSON(cls.id) }, '只匯出「' + cls.name + '」') : null),
+    h('p', { class: 'row' }, h('button', { onClick: () => { m.close(); pickBackup(); } }, '匯入設定…')),
+    h('p', null, h('button', { onClick: () => m.close() }, '關閉'))));
+}
+
+/* ================= 路由 ================= */
+function route() {
+  const hs = location.hash || '#home';
+  ES = null; CV = null; document.body.className = '';
+  if (hs === '#templates') pageTemplates();
+  else if (hs.startsWith('#class-')) {
+    const cls = DB.classes.find(c => c.id === hs.slice(7));
+    if (cls) pageClass(cls); else location.hash = '#home';
+  } else pageHome();
+}
+window.addEventListener('hashchange', route);
+window.addEventListener('resize', () => fit());
+
+/* ================= 首頁 ================= */
+function pageHome() {
+  const app = $('#app'); app.innerHTML = '';
+  app.append(h('div', { class: 'top' }, h('h1', null, '教室座位自動排位'), h('span', { class: 'sp' }),
+    h('button', { class: 'pri', onClick: newClassDialog }, '＋ 新增班級'),
+    h('button', { onClick: () => { location.hash = '#templates'; } }, '教室範本管理'),
+    h('button', { onClick: () => backupModal(null) }, '⚙ 設定／備份')));
+  if (!DB.classes.length) { app.append(h('div', { class: 'empty-home' }, '還沒有班級，按右上角「＋ 新增班級」開始。')); return; }
+  const cards = h('div', { class: 'cards' });
+  DB.classes.forEach(c => {
+    const tpl = DB.templates.find(t => t.id === c.templateId);
+    cards.append(h('div', { class: 'card' },
+      h('h3', null, c.name),
+      h('div', { class: 'meta' }, `人數：${c.students.length} 人`, h('br'), '教室範本：' + (tpl ? tpl.name : (c.templateName || '—') + '（範本已刪除）'), h('br'), '上次排位：' + fmtTime(c.lastArranged)),
+      h('div', { class: 'row' },
+        h('button', { class: 'pri', onClick: () => { location.hash = '#class-' + c.id; } }, '開啟'),
+        h('button', { onClick: async () => { const n = await askText('班級名稱', c.name); if (n) { c.name = n; save(); pageHome(); } } }, '重新命名'),
+        h('button', { onClick: () => { const n = clone(c); n.id = 'c' + uid(); n.name = c.name + ' 複本'; n.history = []; n.lastArranged = null; DB.classes.push(n); save(); pageHome(); toast('已複製班級'); } }, '複製'),
+        confirmBtn('刪除', '再按一次確認刪除', () => { DB.classes = DB.classes.filter(x => x.id !== c.id); save(); pageHome(); }))));
+  });
+  app.append(cards);
+}
+function createClass(name, tplId, list) {
+  const tpl = DB.templates.find(t => t.id === tplId) || DB.templates[0];
+  const layout = clone(tpl.layout); layout.title = name + ' 座位表';
+  const cls = mkClass({ name, templateId: tpl.id, templateName: tpl.name, layout, students: list ? rosterFromList(list) : [] });
+  DB.classes.push(cls); save(); location.hash = '#class-' + cls.id;
+}
+function newClassDialog() {
+  const nameIn = h('input', { type: 'text', placeholder: '例如：601', style: { width: '100%' } });
+  const tplSel = h('select', { style: { width: '100%' } }, DB.templates.map(t => h('option', { value: t.id }, t.name)));
+  let m;
+  const go = (withImport) => {
+    const name = nameIn.value.trim(); if (!name) { toast('請輸入班名'); nameIn.focus(); return; }
+    if (!withImport) { m.close(); createClass(name, tplSel.value, null); return; }
+    m.close();
+    openImporter({ title: '匯入「' + name + '」的學生名單', existing: null, onApply: list => createClass(name, tplSel.value, list) });
+  };
+  m = modal(h('div', null, h('h3', null, '新增班級'), h('p', null, '班名'), nameIn, h('p', null, '教室範本'), tplSel,
+    h('p', { class: 'row' }, h('button', { class: 'pri', onClick: () => go(true) }, '下一步：匯入名單'), h('button', { onClick: () => go(false) }, '先建立，稍後再匯入'), h('button', { onClick: () => m.close() }, '取消'))));
+  setTimeout(() => nameIn.focus(), 30);
+}
+
+/* ================= 教室範本管理 ================= */
+function pageTemplates() {
+  const app = $('#app'); app.innerHTML = '';
+  document.body.className = 'tplpage';
+  let tpl = DB.templates.find(t => t.id === DB.ui.tplId) || DB.templates[0];
+  DB.ui.tplId = tpl.id;
+  ES = makeES({ mode: 'tpl', holder: tpl });
+  const tsel = h('select', { value: tpl.id, onChange: e => { DB.ui.tplId = e.target.value; save(); pageTemplates(); } }, DB.templates.map(t => h('option', { value: t.id }, t.name)));
+  const nameIn = h('input', { type: 'text', value: tpl.name, style: { width: '150px' }, onChange: e => { const v = e.target.value.trim(); if (v) { tpl.name = v; save(); pageTemplates(); } } });
+  const undoBtn = h('button', { disabled: true, onClick: esUndo }, '↶ 復原');
+  ES.onUndo = () => { undoBtn.disabled = !ES.hist.length; };
+  const marqBtn = h('button', { onClick: () => { ES.marq = !ES.marq; marqBtn.classList.toggle('on', ES.marq); ES.stage.style.touchAction = ES.marq ? 'none' : ''; } }, '☐ 框選多個');
+  app.append(h('div', { class: 'top' }, h('a', { class: 'back', href: '#home' }, '← 回首頁'), h('b', null, '教室範本'), tsel, nameIn,
+    h('button', { onClick: async () => { const n = await askText('新範本名稱', '新教室'); if (n) { const t = { id: 'tpl-' + uid(), name: n, layout: { title: '座位表', objs: [] } }; DB.templates.push(t); DB.ui.tplId = t.id; save(); pageTemplates(); } } }, '＋ 新增空白範本'),
+    h('button', { onClick: () => { const t = { id: 'tpl-' + uid(), name: tpl.name + ' 複本', layout: clone(tpl.layout) }; DB.templates.push(t); DB.ui.tplId = t.id; save(); pageTemplates(); toast('已複製範本'); } }, '複製'),
+    tpl.builtin || DB.templates.length < 2 ? null : confirmBtn('刪除範本', '再按一次確認刪除', () => { DB.templates = DB.templates.filter(t => t.id !== tpl.id); DB.ui.tplId = DB.templates[0].id; save(); pageTemplates(); }),
+    h('span', { class: 'sp' }), undoBtn, marqBtn));
+  ES.selbar = h('div', { class: 'selbar' });
+  app.append(ES.selbar);
+  const pal = h('div', { class: 'palette' }, h('h4', null, '元件庫（拖進平面圖，或點一下）'),
+    PAL.map(([k, t]) => { const b = h('button', null, t); b.addEventListener('pointerdown', ev => startPaletteDrag(ev, k, t, pal)); return b; }));
+  const palBtn = h('button', { class: 'palbtn pri', onClick: () => pal.classList.toggle('open') }, '元件庫 ▲');
+  ES.scaler = h('div', { class: 'scaler' }); ES.stage = h('div', { class: 'stage' }); ES.scaler.append(ES.stage);
+  app.append(h('div', { class: 'edgrid' }, pal, h('div', { class: 'wrap' }, ES.scaler)), palBtn);
+  app.append(h('p', { class: 'muted', style: { padding: '0 12px 16px' } }, '點選物件後上方出現工具列；拖曳空白處可框選；所有文字（標題、組號、物件文字）點一下就能改。每張桌子的椅子就是「座位」，編號依左→右（或上→下）排列。'));
+  initStageEvents(); fit(); esRender();
+}
+
+/* ================= 班級頁 ================= */
+let CV = null, AC = null;
+function beep(freq, dur, vol) {
+  if (!DB.settings.sound) return;
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = 'sine'; o.frequency.value = freq; g.gain.value = vol; o.connect(g); g.connect(AC.destination);
+    o.start(); g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + dur); o.stop(AC.currentTime + dur);
+  } catch (e) { }
+}
+function pageClass(cls) {
+  CV = { cls, mode: 'student', open: new Set(['alerts', 'roster']), anim: false, token: Date.now(), trial: null };
+  drawClass();
+}
+function drawClass() {
+  const cls = CV.cls, app = $('#app'); app.innerHTML = '';
+  CV.token = Date.now() + Math.random();
+  const admin = CV.mode === 'admin';
+  ES = makeES({ mode: 'cls', holder: cls, cls, admin, canEdit: admin });
+  ES.scaler = h('div', { class: 'scaler' }); ES.stage = h('div', { class: 'stage' }); ES.scaler.append(ES.stage);
+  if (admin) drawAdmin(app); else drawStudent(app);
+}
+/* ---- 學生模式 ---- */
+function toggleFS() {
+  if (document.fullscreenElement) document.exitFullscreen && document.exitFullscreen();
+  else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => { });
+}
+document.addEventListener('fullscreenchange', () => document.body.classList.toggle('fs', !!document.fullscreenElement));
+function drawStudent(app) {
+  const cls = CV.cls;
+  ES.fitH = 250;
+  app.append(h('div', { class: 'top' }, h('a', { class: 'back backlink', href: '#home' }, '← 回首頁'), h('span', { class: 'sp' }),
+    h('button', { onClick: toggleFS }, '⛶ 全螢幕'), h('button', { onClick: () => savePNG(cls, cls.layout, cls.assign) }, '存成圖片'),
+    h('button', { onClick: () => saveWord(cls, cls.assign) }, '存成 Word'), h('button', { onClick: () => saveExcel(cls, cls.assign) }, '存成 Excel'),
+    h('button', { 'aria-label': '設定', style: { fontSize: '18px', padding: '4px 10px' }, onClick: askPassword }, '⚙')));
+  CV.topbox = h('div', { class: 'animtop', style: { height: '56px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px' } });
+  CV.ctrl = h('div', { class: 'ctrl' });
+  app.append(h('div', { class: 'stu' }, CV.topbox, h('div', { class: 'wrap' }, ES.scaler), CV.ctrl));
+  showIdle();
+  initStageEvents(); fit(); renderStage();
+  // 隱藏入口：長按標題 3 秒
+  const t = ES.titleEl; let timer = null, sx = 0, sy = 0;
+  const stop = () => { clearTimeout(timer); timer = null; };
+  t.addEventListener('pointerdown', e => { sx = e.clientX; sy = e.clientY; stop(); timer = setTimeout(() => { timer = null; askPassword(); }, 3000); });
+  t.addEventListener('pointermove', e => { if (timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 14) stop(); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => t.addEventListener(ev, stop));
+  t.addEventListener('contextmenu', e => e.preventDefault());
+}
+function showIdle() {
+  CV.topbox.innerHTML = ''; CV.ctrl.innerHTML = '';
+  CV.ctrl.append(h('button', { class: 'big pri', onClick: startShuffle }, '自由排位'));
+}
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a' && CV && CV.mode === 'student' && !CV.anim && !document.querySelector('.mbg')) { e.preventDefault(); askPassword(); }
+  else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && ES && ES.canEdit && !(document.activeElement && document.activeElement.isContentEditable) && !/INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '')) { e.preventDefault(); esUndo(); }
+});
+function askPassword() {
+  if (!CV || CV.mode !== 'student' || CV.anim || document.querySelector('.mbg')) return;
+  const inp = h('input', { type: 'password', inputmode: 'numeric', maxlength: 4, pattern: '[0-9]*', autocomplete: 'off', style: { width: '100%', fontSize: '28px', textAlign: 'center', letterSpacing: '8px' } });
+  const err = h('p', { style: { color: '#b00020', minHeight: '1.2em', margin: '6px 0' } }, '');
+  let m;
+  const check = () => {
+    if (inp.value === DB.settings.pw) { m.close(); CV.mode = 'admin'; drawClass(); }
+    else { err.textContent = '密碼錯誤'; inp.value = ''; m.card.classList.remove('shake'); void m.card.offsetWidth; m.card.classList.add('shake'); }
+  };
+  inp.addEventListener('input', () => { inp.value = inp.value.replace(/\D/g, '').slice(0, 4); if (inp.value.length === 4) check(); });
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+  m = modal(h('div', null, h('h3', null, '請輸入 4 位數密碼'), inp, err, h('p', { class: 'row' }, h('button', { class: 'pri', onClick: check }, '確認'), h('button', { onClick: () => m.close() }, '取消'))));
+  setTimeout(() => inp.focus(), 30);
+}
+function startShuffle() {
+  if (CV.anim) return;
+  const cls = CV.cls, token = CV.token;
+  CV.anim = true;
+  const res = arrange(cls);               // 按下的瞬間就算好
+  const bar = h('i');
+  CV.topbox.innerHTML = ''; CV.topbox.append(h('div', { class: 'shuf' }, '電腦排位中…'), h('div', { class: 'prog' }, bar));
+  CV.ctrl.innerHTML = ''; CV.ctrl.append(h('button', { class: 'big pri', disabled: true }, '自由排位'));
+  runShuffle(cls, res, bar, token).then(ok => {
+    if (!ok || !CV || CV.token !== token) return;
+    cls.assign = res.assign; pushHistory(cls, res); cls.lastArranged = Date.now(); save();
+    CV.anim = false;
+    beep(660, .15, .08); setTimeout(() => beep(880, .25, .08), 140);
+    drawClass();
+  });
+}
+function runShuffle(cls, res, bar, token) {
+  return new Promise(resolve => {
+    const D = DB.settings.anim * 1000, T1 = D * 0.68;
+    const ids = Object.keys(ES.chips), names = cls.students.map(s => s.name);
+    ids.forEach(id => { const ch = ES.chips[id]; if (ch.nt) { ch.nt.remove(); ch.nt = null; } });
+    const order = shuffle(ids.slice()), settleAt = {}, st = {};
+    order.forEach((id, i) => { settleAt[id] = T1 + (i / Math.max(1, order.length)) * D * 0.28; st[id] = { next: 0, done: false }; });
+    const t0 = performance.now(); let lastTick = 0, lastDing = 0;
+    const settle = id => {
+      const ch = ES.chips[id], s = st[id]; s.done = true;
+      const stu = res.assign[id] ? stuById(cls, res.assign[id]) : null;
+      setName(ch.nm, stu ? stu.name : '');
+      if (stu && stu.note) { ch.c.append(h('div', { class: 'nt' }, stu.note)); }
+      ch.c.classList.add('pop');
+    };
+    const frame = now => {
+      if (!CV || CV.token !== token) { resolve(false); return; }
+      const e = now - t0; bar.style.width = Math.min(100, e / D * 100) + '%';
+      let changedAny = false, dinged = false;
+      for (const id of ids) {
+        const s = st[id]; if (s.done) continue;
+        if (e >= settleAt[id]) { settle(id); dinged = true; continue; }
+        if (e >= s.next) { setName(ES.chips[id].nm, names[rnd(names.length)] || ''); s.next = e + 40 + 430 * Math.pow(Math.min(1, e / T1), 2) + rnd(30); changedAny = true; }
+      }
+      if (changedAny && now - lastTick > 90) { beep(300 + 500 * Math.min(1, e / T1), .04, .03); lastTick = now; }
+      if (dinged && now - lastDing > 70) { beep(900, .08, .05); lastDing = now; }
+      if (e >= D) { ids.forEach(id => { if (!st[id].done) settle(id); }); setTimeout(() => resolve(true), 350); return; }
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  });
+}
+
+/* ---- 老師後台 ---- */
+function drawAdmin(app) {
+  const cls = CV.cls;
+  ES.beforeRender = () => {
+    const asg = ES.preview || cls.assign, r = checkAssign(cls, asg);
+    CV.cur = r; ES.bad = badSeatSet(cls, asg, r.viol);
+  };
+  ES.afterChange = () => buildPanel();
+  const undoBtn = h('button', { disabled: true, onClick: esUndo }, '↶ 復原');
+  ES.onUndo = () => { undoBtn.disabled = !ES.hist.length; };
+  const marqBtn = h('button', { onClick: () => { ES.marq = !ES.marq; marqBtn.classList.toggle('on', ES.marq); ES.stage.style.touchAction = ES.marq ? 'none' : ''; } }, '☐ 框選多個');
+  const nameIn = h('input', { type: 'text', value: cls.name, style: { width: '110px' }, onChange: e => { const v = e.target.value.trim(); if (v) { cls.name = v; save(); } } });
+  app.append(h('div', { class: 'top' }, h('a', { class: 'back', href: '#home' }, '← 回首頁'), h('b', null, '老師後台'), nameIn, h('span', { class: 'sp' }),
+    undoBtn, marqBtn, h('button', { onClick: () => savePNG(cls, cls.layout, ES.preview || cls.assign) }, '存成圖片（PNG）'),
+    h('button', { onClick: () => saveWord(cls, ES.preview || cls.assign) }, '存成 Word'), h('button', { onClick: () => saveExcel(cls, ES.preview || cls.assign) }, '存成 Excel'),
+    h('button', { class: 'pri', onClick: () => { CV.mode = 'student'; CV.trial = null; drawClass(); } }, '回到學生模式')));
+  ES.selbar = h('div', { class: 'selbar' });
+  app.append(ES.selbar);
+  CV.trialBox = h('div');
+  CV.panel = h('aside', { class: 'panel' });
+  app.append(h('div', { class: 'cols' }, h('div', null, CV.trialBox, h('div', { class: 'wrap' }, ES.scaler), h('p', { class: 'muted', style: { padding: '0 8px' } }, '提示：拖曳桌子可移動；點桌子後上方出現工具列（旋轉、複製、刪除、椅子數）；拖曳座位上的名字可交換；點一下座位可指定學生／設定內定。')), CV.panel));
+  initStageEvents(); fit(); esRender(); buildPanel();
+}
+function refreshAdmin() { esRender(); buildPanel(); }
+
+function startChipDrag(ev, seatId) {
+  if (ev.button > 0 || ES.preview) return;
+  ev.preventDefault(); ev.stopPropagation();
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  const cls = ES.cls, stu = cls.assign[seatId] ? stuById(cls, cls.assign[seatId]) : null;
+  const sx = ev.clientX, sy = ev.clientY; let moved = false, ghost = null, hov = null;
+  const chipAt = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.closest ? el.closest('.chip') : null; };
+  const mv = e => {
+    if (!moved) { if (!stu || Math.hypot(e.clientX - sx, e.clientY - sy) < 6) return; moved = true; ghost = h('div', { class: 'ghost' }, stu.name); document.body.append(ghost); }
+    ghost.style.left = e.clientX + 'px'; ghost.style.top = e.clientY + 'px';
+    const c = chipAt(e.clientX, e.clientY);
+    if (hov && hov !== c) hov.classList.remove('dropt');
+    if (c && c.dataset.seat) c.classList.add('dropt');
+    hov = c;
+  };
+  const up = e => {
+    window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+    if (hov) hov.classList.remove('dropt'); if (ghost) ghost.remove();
+    if (!moved) { openSeatDialog(seatId); return; }
+    const c = chipAt(e.clientX, e.clientY);
+    if (c && c.dataset.seat && c.dataset.seat !== seatId) placeStudent(stu.id, c.dataset.seat);
+  };
+  window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+}
+function startListDrag(ev, stuId, label) {
+  ev.preventDefault();
+  let ghost = null, moved = false, hov = null; const sx = ev.clientX, sy = ev.clientY;
+  const chipAt = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.closest ? el.closest('.chip') : null; };
+  const mv = e => {
+    if (!moved) { if (Math.hypot(e.clientX - sx, e.clientY - sy) < 6) return; moved = true; ghost = h('div', { class: 'ghost' }, label); document.body.append(ghost); }
+    ghost.style.left = e.clientX + 'px'; ghost.style.top = e.clientY + 'px';
+    const c = chipAt(e.clientX, e.clientY); if (hov && hov !== c) hov.classList.remove('dropt'); if (c && c.dataset.seat) c.classList.add('dropt'); hov = c;
+  };
+  const up = e => {
+    window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+    if (hov) hov.classList.remove('dropt'); if (ghost) ghost.remove();
+    if (!moved) return;
+    const c = chipAt(e.clientX, e.clientY);
+    if (c && c.dataset.seat) placeStudent(stuId, c.dataset.seat);
+  };
+  window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+}
+function placeStudent(stuId, toSeat) {
+  esSnap();
+  const a = ES.cls.assign; let from = null;
+  for (const k in a) if (a[k] === stuId) from = k;
+  const occ = a[toSeat];
+  if (from) { if (occ) a[from] = occ; else delete a[from]; }
+  a[toSeat] = stuId;
+  save(); refreshAdmin();
+}
+function openSeatDialog(seatId) {
+  const cls = ES.cls, seat = seatsOf(ES.layout).find(s => s.id === seatId); if (!seat) return;
+  const cur = cls.assign[seatId] ? stuById(cls, cls.assign[seatId]) : null;
+  const sel = h('select', { style: { width: '100%' } }, h('option', { value: '' }, '（空位）'), cls.students.map(s => h('option', { value: s.id }, (s.no ? s.no + ' ' : '') + s.name)));
+  sel.value = cur ? cur.id : '';
+  const lock = h('input', { type: 'checkbox', checked: !!cls.pins[seatId] });
+  const nameIn = h('input', { type: 'text', value: cur ? cur.name : '', placeholder: '輸入新名字可新增學生', style: { width: '100%' } });
+  const noteIn = h('input', { type: 'text', value: cur ? cur.note : '', placeholder: '備註（例：小老師）', style: { width: '100%' } });
+  sel.addEventListener('change', () => { const s = stuById(cls, sel.value); nameIn.value = s ? s.name : ''; noteIn.value = s ? s.note : ''; });
+  let m;
+  const saveIt = () => {
+    esSnap();
+    let stuId = sel.value, st = stuId ? stuById(cls, stuId) : null;
+    const nm = nameIn.value.trim();
+    if (st) { if (nm && nm !== st.name) renameStudent(cls, st, nm); st.note = noteIn.value.trim(); }
+    else if (nm) { st = { id: uid(), no: '', name: nm, gender: '', note: noteIn.value.trim() }; cls.students.push(st); stuId = st.id; cls.students = sortRoster(cls.students); }
+    for (const k in cls.assign) if (cls.assign[k] === stuId && k !== seatId) delete cls.assign[k];
+    if (st) cls.assign[seatId] = st.id; else delete cls.assign[seatId];
+    delete cls.pins[seatId];
+    if (st && lock.checked) {
+      for (const k in cls.pins) if (cls.pins[k] === st.name) delete cls.pins[k];
+      cls.pins[seatId] = st.name; cls.lostPins = cls.lostPins.filter(p => p.name !== st.name);
+    }
+    save(); m.close(); refreshAdmin();
+  };
+  m = modal(h('div', null, h('h3', null, `第 ${seat.label || '?'} 組・座位 ${seat.k}`),
+    h('p', null, '座位上的學生'), sel, h('p', null, '姓名（可直接修改）'), nameIn, h('p', null, '備註'), noteIn,
+    h('p', null, h('label', null, lock, ' 🔒 內定此座位（排位時固定坐這裡）')),
+    h('p', { class: 'row' }, h('button', { class: 'pri', onClick: saveIt }, '儲存'), h('button', { onClick: () => m.close() }, '取消'))));
+}
+
+/* ---- 後台面板 ---- */
+function sec(key, title, body, badge) {
+  const d = h('details', { open: CV.open.has(key) }, h('summary', null, title, badge ? h('span', { class: 'badge' }, String(badge)) : null), body);
+  d.addEventListener('toggle', () => { if (d.open) CV.open.add(key); else CV.open.delete(key); });
+  return d;
+}
+function alertList(cls) {
+  const out = [], seats = seatsOf(cls.layout), names = new Set(cls.students.map(s => s.name));
+  const n = cls.students.length, m = seats.length;
+  if (n > m) out.push(`學生 ${n} 人，但座位只有 ${m} 個，多出 ${n - m} 人無法入座。`);
+  const cnt = new Map(); cls.students.forEach(s => cnt.set(s.name, (cnt.get(s.name) || 0) + 1));
+  const dups = [...cnt].filter(([, v]) => v > 1).map(([k]) => k); if (dups.length) out.push('姓名重複：' + dups.join('、'));
+  const miss = new Set();
+  cls.rules.forEach(r => { [r.a, r.b].forEach(x => { if (x && !names.has(x)) miss.add(x); }); });
+  Object.values(cls.pins).forEach(x => { if (!names.has(x)) miss.add(x); });
+  if (miss.size) out.push('這些人在規則／內定裡，但不在目前名單：' + [...miss].join('、'));
+  const sids = new Set(seats.map(s => s.id));
+  for (const k in cls.pins) if (!sids.has(k)) out.push(`「${cls.pins[k]}」的內定座位在目前版面找不到，請重新指定。`);
+  cls.lostPins.forEach(p => out.push(`「${p.name}」原本內定在 ${p.code}，更換範本後找不到對應座位，請重新指定。`));
+  return out;
+}
+function buildPanel() {
+  if (!CV || !CV.panel) return;
+  const cls = CV.cls, p = CV.panel, top = p.scrollTop;
+  p.innerHTML = '';
+  p.append(secAlerts(cls), secRoster(cls), secRules(cls), secPins(cls), secOptions(cls), secHistory(cls), secSettings(cls));
+  p.scrollTop = top;
+  // 試排橫幅
+  if (CV.trialBox) {
+    CV.trialBox.innerHTML = '';
+    if (CV.trial) {
+      const r = CV.trial;
+      CV.trialBox.append(h('div', { class: 'trialbar' }, h('b', null, '試排預覽（尚未套用）'), ' ',
+        r.ok ? h('span', null, '✔ 全部符合規則') : h('span', { style: { color: '#b00020' } }, '⚠ 有 ' + r.viol.length + ' 組衝突：' + r.viol.map(v => `${v.a}×${v.b}（${TYPE_NAME[v.t]}）`).join('、')),
+        h('div', { class: 'row', style: { marginTop: '6px' } }, h('button', { class: 'pri', onClick: applyTrial }, '套用這個排法'), h('button', { onClick: doTrial }, '再試一次'), h('button', { onClick: discardTrial }, '放棄'))));
+    }
+  }
+}
+function secAlerts(cls) {
+  const body = h('div', { class: 'body' });
+  const al = alertList(cls);
+  al.forEach(t => body.append(h('div', { class: 'alert' }, '⚠ ' + t)));
+  const cur = CV.cur || checkAssign(cls, cls.assign);
+  if (cur.viol.length) body.append(h('div', { class: 'alert bad' }, '目前座位違反規則：' + cur.viol.map(v => `${v.a}×${v.b}（${TYPE_NAME[v.t]}）`).join('、')));
+  else if (Object.keys(cls.assign).length) body.append(h('div', { class: 'ok' }, '✔ 目前座位符合所有規則'));
+  const seated = new Set(Object.values(ES.preview || cls.assign));
+  const un = cls.students.filter(s => !seated.has(s.id));
+  if (un.length) {
+    body.append(h('div', null, h('b', null, `尚未入座（${un.length}）`), h('span', { class: 'muted' }, ' 可拖到座位上'),
+      h('div', { class: 'unseated' }, un.map(s => { const sp = h('span', null, s.name); sp.addEventListener('pointerdown', ev => startListDrag(ev, s.id, s.name)); return sp; }))));
+  }
+  if (!body.children.length) body.append(h('div', { class: 'muted' }, '沒有需要注意的事項。'));
+  return sec('alerts', '提醒與檢查', body, al.length + (cur.viol.length ? 1 : 0) || '');
+}
+function rosterChanged() { save(); refreshAdmin(); }
+function secRoster(cls) {
+  const body = h('div', { class: 'body' });
+  const tbody = h('tbody');
+  cls.students.forEach(s => {
+    const tr = h('tr');
+    const inp = (key, w, type) => h('td', { style: w ? { width: w } : {} }, h('input', { type: 'text', value: s[key], onChange: e => {
+      const v = e.target.value.trim();
+      if (key === 'name') { if (!v) { e.target.value = s.name; return; } renameStudent(cls, s, v); }
+      else if (key === 'no') { const nn = v === '' ? '' : (noOf(v.normalize('NFKC')) || ''); s.no = nn; cls.students = sortRoster(cls.students); }
+      else s[key] = v;
+      rosterChanged();
+    } }));
+    const g = h('select', { value: s.gender, onChange: e => { s.gender = e.target.value; rosterChanged(); } }, h('option', { value: '' }, '—'), h('option', { value: '男' }, '男'), h('option', { value: '女' }, '女'));
+    tr.append(inp('no', '46px'), inp('name'), h('td', { style: { width: '54px' } }, g), inp('note', '70px'),
+      h('td', { style: { width: '34px' } }, h('button', { class: 'sm dng', onClick: () => { cls.students = cls.students.filter(x => x !== s); for (const k in cls.assign) if (cls.assign[k] === s.id) delete cls.assign[k]; rosterChanged(); } }, '✕')));
+    tbody.append(tr);
+  });
+  body.append(h('div', { class: 'row' },
+    h('button', { class: 'pri', onClick: () => openImporter({ title: '匯入「' + cls.name + '」名單', existing: cls.students, onApply: (list, mode) => { applyRoster(cls, list, mode); rosterChanged(); toast('已寫入名單：共 ' + cls.students.length + ' 人'); } }) }, '匯入名單…'),
+    h('button', { onClick: async () => { const n = await askText('新增學生姓名'); if (n) { cls.students.push({ id: uid(), no: '', name: n, gender: '', note: '' }); cls.students = sortRoster(cls.students); rosterChanged(); } } }, '＋ 新增學生')));
+  body.append(h('div', { class: 'tblscroll' }, h('table', { class: 'lst' }, h('thead', null, h('tr', null, h('th', null, '座號'), h('th', null, '姓名'), h('th', null, '性別'), h('th', null, '備註'), h('th'))), tbody)));
+  body.append(h('div', { class: 'muted' }, '有座號時一律依座號排序。也可以把名單檔案直接拖到這一區。'));
+  const d = sec('roster', '學生名單（' + cls.students.length + ' 人）', body);
+  ['dragenter', 'dragover'].forEach(ev => d.addEventListener(ev, e => { e.preventDefault(); d.style.background = '#eef5ff'; }));
+  d.addEventListener('dragleave', () => { d.style.background = ''; });
+  d.addEventListener('drop', e => {
+    e.preventDefault(); d.style.background = '';
+    const f = e.dataTransfer.files[0]; if (!f) return;
+    openImporter({ title: '匯入「' + cls.name + '」名單', existing: cls.students, file: f, onApply: (list, mode) => { applyRoster(cls, list, mode); rosterChanged(); toast('已寫入名單'); } });
+  });
+  return d;
+}
+function secRules(cls) {
+  const body = h('div', { class: 'body' });
+  const names = cls.students.map(s => s.name);
+  const mkSel = (val, fn) => {
+    const opts = names.slice(); if (val && !opts.includes(val)) opts.push(val);
+    const s = h('select', null, h('option', { value: '' }, '（選擇）'), opts.map(n => h('option', { value: n }, n + (names.includes(n) ? '' : '（不在名單）'))));
+    s.value = val || ''; s.addEventListener('change', () => fn(s.value)); return s;
+  };
+  const tbody = h('tbody');
+  cls.rules.forEach((r, i) => {
+    const ts = h('select', { value: r.type, onChange: e => { r.type = e.target.value; rosterChanged(); } }, Object.entries(TYPE_NAME).map(([k, v]) => h('option', { value: k }, v)));
+    tbody.append(h('tr', null, h('td', null, mkSel(r.a, v => { r.a = v; rosterChanged(); })), h('td', null, mkSel(r.b, v => { r.b = v; rosterChanged(); })), h('td', null, ts),
+      h('td', { style: { width: '34px' } }, h('button', { class: 'sm dng', onClick: () => { cls.rules.splice(i, 1); rosterChanged(); } }, '✕'))));
+  });
+  body.append(h('table', { class: 'lst' }, h('thead', null, h('tr', null, h('th', null, '甲'), h('th', null, '乙'), h('th', null, '規則'), h('th'))), tbody));
+  body.append(h('div', null, h('button', { onClick: () => { cls.rules.push({ a: '', b: '', type: 'adj' }); rosterChanged(); } }, '＋ 新增一對')));
+  const num = (key, label, min, max) => h('label', { style: { display: 'block', margin: '4px 0' } }, label + ' ', h('input', { type: 'number', min, max, step: 10, value: cls.settings[key], style: { width: '80px' }, onChange: e => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) { cls.settings[key] = clamp(v, min, max); save(); CV.trial = null; ES.preview = null; refreshAdmin(); } } }), ' px');
+  body.append(h('div', { class: 'muted' }, '不可鄰座＝同桌相鄰椅、長桌正對面、或兩椅中心距離小於門檻；不可同組＝同一張桌子；不可相近＝兩張桌子中心距離小於門檻。'));
+  body.append(num('adjDist', '鄰座距離門檻', 20, 600), num('nearDist', '相近距離門檻', 100, 1500));
+  return sec('rules', '不能坐在一起（' + cls.rules.length + ' 對）', body);
+}
+function secPins(cls) {
+  const body = h('div', { class: 'body' });
+  const seats = seatsOf(cls.layout), byId = new Map(seats.map(s => [s.id, s]));
+  const list = Object.entries(cls.pins);
+  if (!list.length && !cls.lostPins.length) body.append(h('div', { class: 'muted' }, '還沒有內定座位。在座位圖上點一個座位，選學生並勾選「內定」。'));
+  list.forEach(([sid, name]) => {
+    const s = byId.get(sid);
+    body.append(h('div', { class: 'row' }, h('span', null, '🔒 ' + name + ' → ' + (s ? `第 ${s.label || '?'} 組・座位 ${s.k}` : '（座位不存在，請重新指定）')),
+      h('button', { class: 'sm', onClick: () => { delete cls.pins[sid]; rosterChanged(); } }, '取消內定')));
+  });
+  cls.lostPins.forEach((p, i) => body.append(h('div', { class: 'row alert' }, '⚠ ' + p.name + '（原 ' + p.code + '）', h('button', { class: 'sm', onClick: () => { cls.lostPins.splice(i, 1); rosterChanged(); } }, '略過'))));
+  return sec('pins', '內定座位（' + list.length + '）', body);
+}
+function doTrial() {
+  const cls = CV.cls; const r = arrange(cls);
+  CV.trial = r; ES.preview = r.assign; ES.sel.clear(); refreshAdmin();
+}
+function applyTrial() {
+  const cls = CV.cls, r = CV.trial; if (!r) return;
+  cls.assign = clone(r.assign); pushHistory(cls, r); cls.lastArranged = Date.now(); CV.trial = null; ES.preview = null; save(); refreshAdmin(); toast('已套用試排結果');
+}
+function discardTrial() { CV.trial = null; ES.preview = null; refreshAdmin(); }
+function secOptions(cls) {
+  const body = h('div', { class: 'body' });
+  const genders = new Set(cls.students.map(s => s.gender).filter(Boolean));
+  const canBal = genders.has('男') && genders.has('女');
+  const sv = (k, v) => { cls.settings[k] = v; save(); };
+  body.append(h('label', null, '學生比座位少時，空位：', h('select', { value: cls.settings.empty, onChange: e => sv('empty', e.target.value) }, h('option', { value: 'spread' }, '平均分散'), h('option', { value: 'concentrate' }, '集中在某幾桌'))));
+  body.append(h('label', null, h('input', { type: 'checkbox', checked: cls.settings.balance && canBal, disabled: !canBal, onChange: e => sv('balance', e.target.checked) }), ' 男女平均分配', canBal ? '' : h('span', { class: 'muted' }, '（名單需有性別欄位）')));
+  body.append(h('label', null, h('input', { type: 'checkbox', checked: cls.settings.keep, onChange: e => sv('keep', e.target.checked) }), ' 保留上一次的組別（同一桌的人仍同桌，只換桌內座位）'));
+  body.append(h('div', { class: 'row' }, h('button', { class: 'pri', onClick: doTrial }, '試排（先預覽）')));
+  body.append(h('div', { class: 'muted' }, '學生模式的「自由排位」使用同一套規則；找不到完全符合的排法時會採用違反最少的結果，警告只會出現在這裡。'));
+  return sec('opts', '排位選項與試排', body);
+}
+function secHistory(cls) {
+  const body = h('div', { class: 'body' });
+  if (!cls.history.length) body.append(h('div', { class: 'muted' }, '還沒有排位紀錄（保留最近 10 次）。'));
+  cls.history.forEach((e, i) => body.append(h('div', { class: 'row' }, h('span', null, `${i + 1}. ${fmtTime(e.t)} `, e.ok ? '✔' : h('span', { style: { color: '#b00020' } }, '⚠ 衝突 ' + (e.viol || []).length)),
+    h('button', { class: 'sm', onClick: () => { esSnap(); const ids = new Set(seatsOf(cls.layout).map(s => s.id)); cls.assign = {}; for (const k in e.assign) if (ids.has(k)) cls.assign[k] = e.assign[k]; CV.trial = null; ES.preview = null; save(); refreshAdmin(); toast('已套用第 ' + (i + 1) + ' 筆紀錄'); } }, '套用'))));
+  return sec('hist', '排位紀錄', body);
+}
+function applyTemplate(cls, tpl) {
+  const oldSeats = seatsOf(cls.layout), oldCode = new Map(oldSeats.map(s => [s.id, s.label + '|' + s.k]));
+  const nl = clone(tpl.layout); nl.title = cls.layout.title;
+  const newSeats = seatsOf(nl), toNew = new Map(); newSeats.forEach(s => { const c = s.label + '|' + s.k; if (!toNew.has(c)) toNew.set(c, s.id); });
+  const na = {}; for (const sid in cls.assign) { const n = toNew.get(oldCode.get(sid)); if (n) na[n] = cls.assign[sid]; }
+  const np = {};
+  for (const sid in cls.pins) {
+    const code = oldCode.get(sid), n = code && toNew.get(code);
+    if (n) np[n] = cls.pins[sid]; else cls.lostPins.push({ name: cls.pins[sid], code: code ? code.replace('|', '-') : '?' });
+  }
+  cls.layout = nl; cls.assign = na; cls.pins = np; cls.templateId = tpl.id; cls.templateName = tpl.name; cls.history = [];
+  CV.trial = null;
+}
+function secSettings(cls) {
+  const body = h('div', { class: 'body' });
+  const tsel = h('select', { value: cls.templateId }, DB.templates.map(t => h('option', { value: t.id }, t.name)));
+  body.append(h('div', null, h('b', null, '教室範本：'), tsel, ' ', confirmBtn('更換範本', '再按一次確認（座位圖會換成範本版面）', () => {
+    const t = DB.templates.find(x => x.id === tsel.value); if (!t) return;
+    applyTemplate(cls, t); ES.holder = cls; ES.layout = cls.layout; ES.hist = []; ES.sel.clear(); ES.preview = null; save(); refreshAdmin(); toast('已更換範本；名單與限制保留');
+  })));
+  body.append(h('div', null, h('button', { onClick: async () => { const n = await askText('將目前版面存成範本，名稱：', cls.name + ' 版面'); if (n) { DB.templates.push({ id: 'tpl-' + uid(), name: n, layout: (() => { const l = clone(cls.layout); return l; })() }); save(); toast('已存成範本「' + n + '」'); buildPanel(); } } }, '把目前版面存成範本')));
+  body.append(h('label', null, '排位動畫長度：', h('input', { type: 'range', min: 2, max: 8, step: 1, value: DB.settings.anim, onInput: e => { DB.settings.anim = +e.target.value; save(); e.target.nextSibling.textContent = ' ' + e.target.value + ' 秒'; } }), h('span', null, ' ' + DB.settings.anim + ' 秒')));
+  body.append(h('label', null, h('input', { type: 'checkbox', checked: DB.settings.sound, onChange: e => { DB.settings.sound = e.target.checked; save(); if (e.target.checked) beep(880, .1, .06); } }), ' 動畫音效'));
+  const pw = h('input', { type: 'text', inputmode: 'numeric', maxlength: 4, placeholder: '4 位數', style: { width: '80px' } });
+  body.append(h('div', { class: 'row' }, h('span', null, '後台密碼：'), pw, h('button', { onClick: () => { if (/^\d{4}$/.test(pw.value)) { DB.settings.pw = pw.value; save(); pw.value = ''; toast('密碼已更新'); } else toast('請輸入 4 位數字'); } }, '修改')));
+  const gid = h('input', { type: 'text', value: DB.settings.gClientId || '', placeholder: 'xxxx.apps.googleusercontent.com', style: { width: '100%' }, onChange: e => { DB.settings.gClientId = e.target.value.trim(); save(); } });
+  const gst = h('span', { class: 'muted' }, DB.settings.gOn ? (GD.token ? '已登入，儲存時自動同步' : '已啟用，儲存時會要求登入 Google') : '未啟用');
+  const gon = h('input', { type: 'checkbox', checked: !!DB.settings.gOn, onChange: async e => {
+    if (e.target.checked) { DB.settings.gClientId = gid.value.trim(); save(); const ok = await gdSignIn(); DB.settings.gOn = ok; e.target.checked = ok; }
+    else { DB.settings.gOn = false; GD.token = null; }
+    save(); gst.textContent = DB.settings.gOn ? '已登入，儲存時自動同步' : '未啟用';
+  } });
+  body.append(h('div', { style: { borderTop: '1px solid #eee', paddingTop: '8px' } }, h('b', null, '☁ Google 雲端同步'), h('div', { class: 'muted' }, '登入後，按「存成圖片／Word／Excel」時，檔案會另外存一份到你 Google 雲端硬碟的「座位表」資料夾（只能存取本程式建立的檔案）。'),
+    h('div', { style: { margin: '6px 0' } }, 'Google Client ID：', gid),
+    h('label', null, gon, ' 登入 Google 並啟用同步　'), gst));
+  body.append(h('div', { class: 'row' }, h('button', { onClick: () => backupModal(cls) }, '匯出／匯入設定（JSON）')));
+  return sec('set', '版面與設定', body);
+}
+
+/* ================= 啟動 ================= */
+['dragover', 'drop'].forEach(ev => window.addEventListener(ev, e => e.preventDefault()));
+load();
+route();
+
+</script>
+</body>
+</html>
