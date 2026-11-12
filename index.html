@@ -62,6 +62,7 @@ a.back{color:var(--accent);text-decoration:none;padding:7px 8px;font-size:14px}
 .chip{position:absolute;width:120px;height:58px;border:1px solid #dcdcdc;border-radius:10px;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;overflow:hidden}
 .chip .nm{font-size:26px;font-weight:500;white-space:nowrap}
 .chip .nm:empty::before{content:"空位";color:#c8c8c8;font-size:20px}
+.chip .nm .no{font-size:15px;color:#888;font-weight:400;margin-right:6px}
 .chip .nt{font-size:14px;color:#666;white-space:nowrap}
 .chip .lock{position:absolute;right:3px;top:1px;font-size:12px}
 .chip.tpl{background:#fafafa;border-style:dashed}
@@ -430,10 +431,13 @@ function fit() {
 }
 function ptStage(ev) { const r = ES.stage.getBoundingClientRect(); return { x: (ev.clientX - r.left) / ES.S, y: (ev.clientY - r.top) / ES.S }; }
 
-function setName(nm, text) {
-  nm.textContent = text || '';
-  const len = (text || '').length;
-  nm.style.fontSize = len > 4 ? Math.max(14, Math.floor(104 / len)) + 'px' : '';
+function setName(nm, text, no) {
+  nm.textContent = '';
+  if (!text) { nm.style.fontSize = ''; return; }
+  const noW = no ? String(no).length * 9 + 8 : 0;
+  nm.style.fontSize = Math.max(12, Math.min(26, Math.floor((112 - noW) / text.length))) + 'px';
+  if (no) nm.append(h('span', { class: 'no' }, String(no)));
+  nm.append(document.createTextNode(text));
 }
 function mkText(parent, obj, key, o) {
   const e = h('div', { class: 't' + (o.align ? ' a' + o.align : '') + (o.cls ? ' ' + o.cls : '') });
@@ -512,7 +516,7 @@ function buildChip(o, s) {
     return c;
   }
   const cls = ES.cls, a = ES.preview || cls.assign, stu = a[id] ? stuById(cls, a[id]) : null;
-  const nm = h('div', { class: 'nm' }); setName(nm, stu ? stu.name : '');
+  const nm = h('div', { class: 'nm' }); setName(nm, stu ? stu.name : '', stu ? stu.no : '');
   c.append(nm);
   let nt = null;
   if (stu && stu.note) { nt = h('div', { class: 'nt' }, stu.note); c.append(nt); }
@@ -1204,8 +1208,14 @@ function drawCanvas(layout, cls, assign) {
       g.strokeStyle = '#dcdcdc'; g.lineWidth = 1; g.fillStyle = '#fff'; rrect(cx - CW / 2, cy - CH / 2, CW, CH, 10); g.fill(); g.stroke();
       const st = assign && assign[id] ? stuById(cls, assign[id]) : null;
       if (!st) { txt('空位', cx, cy, 20, 'c', '#c8c8c8'); return; }
-      const sz = st.name.length > 4 ? Math.max(14, Math.floor(104 / st.name.length)) : 26;
-      if (st.note) { txt(st.name, cx, cy - 8, sz, 'c'); txt(st.note, cx, cy + 16, 14, 'c', '#666'); } else txt(st.name, cx, cy, sz, 'c');
+      const noW = st.no ? String(st.no).length * 9 + 8 : 0;
+      const sz = Math.max(12, Math.min(26, Math.floor((112 - noW) / st.name.length)));
+      const yy = st.note ? cy - 8 : cy;
+      g.font = `500 ${sz}px ${font}`; const nw = g.measureText(st.name).width;
+      const tot = noW + nw, x0 = cx - tot / 2;
+      txt(st.name, x0 + noW, yy, sz, 'l');
+      if (st.no) txt(String(st.no), x0, yy, 15, 'l', '#888');
+      if (st.note) txt(st.note, cx, cy + 16, 14, 'c', '#666');
     });
   });
   return cv;
@@ -1579,7 +1589,7 @@ function runShuffle(cls, res, bar, token) {
     const settle = id => {
       const ch = ES.chips[id], s = st[id]; s.done = true;
       const stu = res.assign[id] ? stuById(cls, res.assign[id]) : null;
-      setName(ch.nm, stu ? stu.name : '');
+      setName(ch.nm, stu ? stu.name : '', stu ? stu.no : '');
       if (stu && stu.note) { ch.c.append(h('div', { class: 'nt' }, stu.note)); }
       ch.c.classList.add('pop');
     };
@@ -1590,7 +1600,7 @@ function runShuffle(cls, res, bar, token) {
       for (const id of ids) {
         const s = st[id]; if (s.done) continue;
         if (e >= settleAt[id]) { settle(id); dinged = true; continue; }
-        if (e >= s.next) { setName(ES.chips[id].nm, names[rnd(names.length)] || ''); s.next = e + 40 + 430 * Math.pow(Math.min(1, e / T1), 2) + rnd(30); changedAny = true; }
+        if (e >= s.next) { { const rs = cls.students[rnd(cls.students.length)]; setName(ES.chips[id].nm, rs ? rs.name : '', rs ? rs.no : ''); } s.next = e + 40 + 430 * Math.pow(Math.min(1, e / T1), 2) + rnd(30); changedAny = true; }
       }
       if (changedAny && now - lastTick > 90) { beep(300 + 500 * Math.min(1, e / T1), .04, .03); lastTick = now; }
       if (dinged && now - lastDing > 70) { beep(900, .08, .05); lastDing = now; }
